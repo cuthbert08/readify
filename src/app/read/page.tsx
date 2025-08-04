@@ -16,7 +16,7 @@ import { getAvailableVoices, AvailableVoicesOutput } from '@/ai/flows/voice-sele
 import { generateSpeech, previewSpeech } from '@/ai/flows/tts-flow';
 import { summarizePdf, SummarizePdfOutput } from '@/ai/flows/summarize-pdf';
 import { chatWithPdf, ChatWithPdfOutput } from '@/ai/flows/chat-with-pdf';
-import { Sidebar, SidebarProvider, SidebarTrigger, SidebarContent, SidebarHeader, SidebarMenu, SidebarMenuItem, SidebarMenuButton, SidebarFooter, useSidebar } from '@/components/ui/sidebar';
+import { Sidebar, SidebarProvider, SidebarTrigger, SidebarContent, SidebarHeader, SidebarMenu, SidebarMenuItem, SidebarMenuButton, SidebarFooter, useSidebar, SidebarGroup } from '@/components/ui/sidebar';
 import { getDocuments, saveDocument, Document } from '@/lib/db';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import AiDialog, { AiDialogType } from '@/components/ai-dialog';
