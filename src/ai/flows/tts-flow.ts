@@ -17,7 +17,7 @@ export const generateSpeech = ai.defineFlow(
   },
   async (input) => {
     const { media } = await ai.generate({
-      model: openAI.model('tts-1'),
+      model: 'openai/tts-1',
       prompt: input.text,
       config: {
         voice: input.voice,

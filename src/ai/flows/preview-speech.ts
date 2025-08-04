@@ -18,7 +18,7 @@ export const previewSpeech = ai.defineFlow(
   async (input) => {
     
     const { media } = await ai.generate({
-      model: openAI.model('tts-1'),
+      model: 'openai/tts-1',
       prompt: "Hello! This is a preview of my voice.",
       config: {
         voice: input.voice,
