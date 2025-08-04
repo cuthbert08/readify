@@ -68,5 +68,4 @@ export async function previewSpeech(input: Pick<GenerateSpeechInput, 'voice'>): 
     speakingRate: 1.0,
   });
 }
-
     
