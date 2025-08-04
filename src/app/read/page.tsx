@@ -486,7 +486,7 @@ export default function ReadPage() {
                                     {availableVoices.map((voice) => (
                                     <div key={voice.name} className="flex items-center justify-between pr-2">
                                         <SelectItem value={voice.name} className="flex-1">
-                                            {voice.name} ({voice.lang})
+                                            {voice.name} ({voice.gender})
                                         </SelectItem>
                                         <Button 
                                             variant="ghost" 

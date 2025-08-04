@@ -14,18 +14,18 @@ import {z} from 'genkit';
 const AvailableVoicesOutputSchema = z.array(
   z.object({
     name: z.string(),
-    lang: z.string(),
+    gender: z.string(),
   })
 );
 export type AvailableVoicesOutput = z.infer<typeof AvailableVoicesOutputSchema>;
 
 const availableVoices = [
-  { name: 'alloy', lang: 'en-US' },
-  { name: 'echo', lang: 'en-US' },
-  { name: 'fable', lang: 'en-US' },
-  { name: 'onyx', lang: 'en-US' },
-  { name: 'nova', lang: 'en-US' },
-  { name: 'shimmer', lang: 'en-US' },
+  { name: 'alloy', gender: 'male' },
+  { name: 'echo', gender: 'male' },
+  { name: 'fable', gender: 'male' },
+  { name: 'onyx', gender: 'male' },
+  { name: 'nova', gender: 'female' },
+  { name: 'shimmer', gender: 'female' },
 ];
 
 export async function getAvailableVoices(): Promise<AvailableVoicesOutput> {
