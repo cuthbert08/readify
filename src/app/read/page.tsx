@@ -4,7 +4,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import * as pdfjsLib from 'pdfjs-dist';
 import type { PDFDocumentProxy } from 'pdfjs-dist/types/src/display/api';
-import { UploadCloud, FileText, Loader2, LogOut, Save, Library, Download, Bot, Lightbulb, HelpCircle, Cloud, CloudOff, Settings, Menu, Home, BarChart, BookOpenCheck } from 'lucide-react';
+import { UploadCloud, FileText, Loader2, LogOut, Save, Library, Download, Bot, Lightbulb, HelpCircle, Cloud, CloudOff, Settings, Menu, Home, BarChart, BookOpenCheck, BrainCircuit } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import PdfViewer, { TextItem } from '@/components/pdf-viewer';
 import AudioPlayer from '@/components/audio-player';
@@ -18,6 +18,7 @@ import { summarizePdf, SummarizePdfOutput } from '@/ai/flows/summarize-pdf';
 import { chatWithPdf, ChatWithPdfOutput } from '@/ai/flows/chat-with-pdf';
 import { generateGlossary, GenerateGlossaryOutput, GlossaryItem } from '@/ai/flows/glossary-flow';
 import { explainText, ExplainTextOutput } from '@/ai/flows/explain-text-flow';
+import { generateQuiz, GenerateQuizOutput } from '@/ai/flows/quiz-flow';
 import { Sidebar, SidebarHeader, SidebarMenu, SidebarMenuItem, SidebarMenuButton, SidebarFooter, SidebarContent } from '@/components/ui/sidebar';
 import { getDocuments, saveDocument, Document, getUserSession } from '@/lib/db';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -83,6 +84,7 @@ export default function ReadPage() {
     const [aiChatOutput, setAiChatOutput] = useState<ChatWithPdfOutput | null>(null);
     const [aiGlossaryOutput, setAiGlossaryOutput] = useState<GenerateGlossaryOutput | null>(null);
     const [aiExplanationOutput, setAiExplanationOutput] = useState<ExplainTextOutput | null>(null);
+    const [aiQuizOutput, setAiQuizOutput] = useState<GenerateQuizOutput | null>(null);
     
     const [showControls, setShowControls] = useState(true);
     const [isAdmin, setIsAdmin] = useState(false);
@@ -175,6 +177,9 @@ export default function ReadPage() {
       setAllTextItems([]);
       setAiSummaryOutput(null);
       setAiChatOutput(null);
+      setAiGlossaryOutput(null);
+      setAiExplanationOutput(null);
+      setAiQuizOutput(null);
       setGeneratedAudioUrl(null);
   
       try {
@@ -190,11 +195,7 @@ export default function ReadPage() {
           const page = await pdf.getPage(i);
           const content = await page.getTextContent();
           const items = content.items.map(item => {
-            const textItem = item as any; // Cast to access properties
-            const tx = pdfjsLib.Util.transform(
-              page.view,
-              textItem.transform
-            );
+            const textItem = item as any;
     
             return {
               text: textItem.str,
@@ -427,6 +428,7 @@ export default function ReadPage() {
       setAiSummaryOutput(null);
       setAiGlossaryOutput(null);
       setAiExplanationOutput(null);
+      setAiQuizOutput(null);
   
       try {
         if ((type === 'summary' || type === 'key-points') && documentText) {
@@ -438,6 +440,9 @@ export default function ReadPage() {
         } else if (type === 'explain' && data?.text) {
             const result = await explainText({ text: data.text, context: documentText });
             setAiExplanationOutput(result);
+        } else if (type === 'quiz' && documentText) {
+            const result = await generateQuiz({ documentText });
+            setAiQuizOutput(result);
         }
       } catch (error) {
         console.error(`AI Error (${type}):`, error);
@@ -574,7 +579,10 @@ export default function ReadPage() {
                             <Label>Voice</Label>
                             <Select value={selectedVoice} onValueChange={setSelectedVoice} disabled={isSpeaking || isGeneratingSpeech}>
                                 <SelectTrigger>
-                                    <SelectValue placeholder="Select a voice" />
+                                    <SelectValue>
+                                      {availableVoices.find(v => v.name === selectedVoice)?.name.replace('text-to-speech-en-US-Standard-', '')}
+                                      ({availableVoices.find(v => v.name === selectedVoice)?.gender})
+                                    </SelectValue>
                                 </SelectTrigger>
                                 <SelectContent>
                                     {availableVoices.map((voice) => (
@@ -623,6 +631,12 @@ export default function ReadPage() {
                         <BookOpenCheck />
                         Create Glossary
                       </SidebarMenuButton>
+                    </SidebarMenuItem>
+                    <SidebarMenuItem>
+                        <SidebarMenuButton onClick={() => handleAiAction('quiz')} disabled={pdfState !== 'loaded'}>
+                            <BrainCircuit />
+                            Generate Quiz
+                        </SidebarMenuButton>
                     </SidebarMenuItem>
                     <SidebarMenuItem>
                       <SidebarMenuButton onClick={() => handleAiAction('chat')} disabled={pdfState !== 'loaded'}>
@@ -779,6 +793,7 @@ export default function ReadPage() {
             chatOutput={aiChatOutput}
             glossaryOutput={aiGlossaryOutput}
             explanationOutput={aiExplanationOutput}
+            quizOutput={aiQuizOutput}
             onChatSubmit={handleAiChat}
           />
         </div>
