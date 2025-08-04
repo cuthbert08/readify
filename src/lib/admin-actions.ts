@@ -1,3 +1,4 @@
+
 'use server';
 
 import { kv } from '@vercel/kv';
@@ -43,15 +44,25 @@ export async function getAllUsers(): Promise<User[]> {
 }
 
 export async function getAllDocuments(): Promise<Document[]> {
-    await checkAdmin();
-    const docKeys = await kv.keys('doc:*');
-    if (docKeys.length === 0) return [];
-    
-    const docs = await kv.mget<Document[]>(...docKeys);
-    
-    return docs
-      .filter((d): d is Document => d !== null && d.id !== undefined && d.fileName !== undefined)
-      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    await checkAdmin();
+    // Get all lists of document IDs for all users
+    const userDocListKeys = await kv.keys('user:*:docs');
+    if (userDocListKeys.length === 0) return [];
+
+    const allDocIdArrays = await kv.mget<string[]>(...userDocListKeys);
+    const allDocIds = allDocIdArrays.flat().filter(id => id); // Flatten and remove nulls
+
+    if (allDocIds.length === 0) return [];
+    
+    // Deduplicate IDs in case a document is referenced by multiple users (shouldn't happen but safe)
+    const uniqueDocIds = [...new Set(allDocIds)];
+    const docKeys = uniqueDocIds.map(id => `doc:${id}`);
+
+    const docs = await kv.mget<Document[]>(...docKeys);
+    
+    return docs
+      .filter((d): d is Document => d !== null && d.id !== undefined && d.fileName !== undefined)
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 }
 
 
