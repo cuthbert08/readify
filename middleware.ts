@@ -12,13 +12,12 @@ export async function middleware(req: NextRequest) {
   const isProtectedRoute = protectedRoutes.some((p) => path.startsWith(p));
   const isPublicRoute = publicRoutes.includes(path);
   const isAdminRoute = adminRoutes.some((p) => path.startsWith(p));
-
+  
   // If trying to access an admin route
   if (isAdminRoute) {
     if (!session?.isAdmin) {
-      // If not an admin, redirect to the main app page or login
-      const redirectUrl = session?.userId ? '/read' : '/';
-      return NextResponse.redirect(new URL(redirectUrl, req.nextUrl));
+      console.log('Middleware: Admin access denied. Redirecting to login.');
+      return NextResponse.redirect(new URL('/', req.nextUrl));
     }
     // If admin, allow access
     return NextResponse.next();
@@ -41,5 +40,5 @@ export async function middleware(req: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/((?!api|_next/static|_next/image|.*\\.png$).*)'],
+  matcher: ['/((?!api|_next/static|_next/image|.*\\.png$|scripts/.*).*)'],
 };

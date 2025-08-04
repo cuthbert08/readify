@@ -3,6 +3,7 @@
 
 import { kv } from '@vercel/kv';
 import { getSession } from './session';
+import type { User as DbUser } from './db';
 
 export interface Document {
   id: string;
@@ -13,19 +14,17 @@ export interface Document {
   currentPage: number;
   totalPages: number;
   zoomLevel: number;
-  createdAt: string; // Changed to string (ISO format)
+  createdAt: string; 
 }
 
-export interface User {
-  id: string;
-  email: string;
-  isAdmin: boolean;
-  createdAt: string; // Changed to string (ISO format)
-}
+// Re-export User type from db to ensure consistency
+export type User = DbUser;
+
 
 async function checkAdmin() {
   const session = await getSession();
   if (!session?.isAdmin) {
+    console.warn('Admin check failed. Session:', session);
     throw new Error('Unauthorized: Admin access required.');
   }
 }
@@ -59,7 +58,7 @@ export async function deleteUser(userId: string): Promise<{ success: boolean; me
   await checkAdmin();
   
   try {
-    const user = await kv.get<User>(`user-by-id:${userId}`);
+    const user: User | null = await kv.get(`user-by-id:${userId}`);
     if (!user) {
       throw new Error('User not found');
     }
@@ -68,12 +67,10 @@ export async function deleteUser(userId: string): Promise<{ success: boolean; me
       throw new Error('Cannot delete an admin user.');
     }
 
-    // Start a pipeline for atomic operations
     const pipeline = kv.pipeline();
 
-    // Find and delete all documents associated with the user
     const docListKey = `user:${userId}:docs`;
-    const docIds = await kv.lrange(docListKey, 0, -1);
+    const docIds: string[] = await kv.lrange(docListKey, 0, -1);
     
     if (docIds.length > 0) {
       const docKeysToDelete = docIds.map(id => `doc:${id}`);
@@ -81,14 +78,10 @@ export async function deleteUser(userId: string): Promise<{ success: boolean; me
       pipeline.del(...docKeysToDelete);
     }
     
-    // Delete the user's document list
     pipeline.del(docListKey);
-    // Delete the user record by ID
     pipeline.del(`user-by-id:${userId}`);
-    // Delete the user record by email
     pipeline.del(`user:${user.email}`);
 
-    // Execute all commands in the pipeline
     await pipeline.exec();
 
     return { success: true };

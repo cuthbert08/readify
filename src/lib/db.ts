@@ -13,22 +13,33 @@ export interface Document {
   audioUrl: string | null;
   sentences: Sentence[] | null;
   zoomLevel: number;
-  createdAt: string; // Changed to string for ISO 8601 format
+  createdAt: string; 
 }
 
 export interface User {
     id: string;
+    name: string;
     email: string;
+    password: string; // This is the hashed password
     isAdmin: boolean;
-    createdAt: string; // Changed to string for ISO 8601 format
+    createdAt: string; 
 }
 
-// This function is safe to call from client components as it's a server action.
 export async function getUserSession() {
-  return await getSession();
+  const session = await getSession();
+  if (session) {
+    const user: User | null = await kv.get(`user-by-id:${session.userId}`);
+    if (user) {
+        return {
+            ...session,
+            name: user.name, // Add name to the session object
+        };
+    }
+  }
+  return session;
 }
 
-// Function to save or update a document's metadata
+
 export async function saveDocument(docData: {
   id?: string;
   fileName: string;
@@ -46,7 +57,6 @@ export async function saveDocument(docData: {
   let docId = docData.id;
 
   if (docId) {
-    // Update existing document
     const existingDocRaw = await kv.get(`doc:${docId}`);
     if (!existingDocRaw) {
         throw new Error('Document not found.');
@@ -67,7 +77,6 @@ export async function saveDocument(docData: {
     return updatedDoc;
 
   } else {
-    // Create new document
     docId = randomUUID();
     const newDoc: Document = {
       id: docId,
@@ -81,7 +90,6 @@ export async function saveDocument(docData: {
     };
     await kv.set(`doc:${docId}`, newDoc);
     
-    // Add document ID to user's list of documents
     const userDocListKey = `user:${userId}:docs`;
     await kv.lpush(userDocListKey, docId);
 
@@ -89,7 +97,6 @@ export async function saveDocument(docData: {
   }
 }
 
-// Function to get all documents for the current user
 export async function getDocuments(): Promise<Document[]> {
   const session = await getSession();
   if (!session?.userId) {
