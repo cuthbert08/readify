@@ -19,15 +19,14 @@ const AvailableVoicesOutputSchema = z.array(
 );
 export type AvailableVoicesOutput = z.infer<typeof AvailableVoicesOutputSchema>;
 
-// OpenAI TTS-1 voices
 const availableVoices = [
-  { name: 'alloy', lang: 'en-US' },
-  { name: 'echo', lang: 'en-US' },
-  { name: 'fable', lang: 'en-US' },
-  { name: 'onyx', lang: 'en-US' },
-  { name: 'nova', lang: 'en-US' },
-  { name: 'shimmer', lang: 'en-US' },
-  { name: 'Default', lang: 'en-US' }, // Placeholder for default browser voice if needed elsewhere
+  { name: 'Algenib', lang: 'en-US' },
+  { name: 'Achernar', lang: 'en-US' },
+  { name: 'Enif', lang: 'en-US' },
+  { name: 'Hadar', lang: 'en-US' },
+  { name: 'Izar', lang: 'en-US' },
+  { name: 'Keid', lang: 'en-US' },
+  { name: 'Default', lang: 'en-US' },
 ];
 
 export async function getAvailableVoices(): Promise<AvailableVoicesOutput> {

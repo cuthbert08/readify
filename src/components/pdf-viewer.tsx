@@ -9,10 +9,9 @@ type PdfViewerProps = {
   pageNumber: number;
   textContent: TextContent | null;
   viewport: PageViewport | null;
-  highlightedIndex: number;
 };
 
-const PdfViewer: React.FC<PdfViewerProps> = ({ pdfDoc, pageNumber, textContent, viewport, highlightedIndex }) => {
+const PdfViewer: React.FC<PdfViewerProps> = ({ pdfDoc, pageNumber, textContent, viewport }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const textLayerRef = useRef<HTMLDivElement>(null);
   const renderTaskRef = useRef<RenderTask | null>(null);
@@ -22,6 +21,7 @@ const PdfViewer: React.FC<PdfViewerProps> = ({ pdfDoc, pageNumber, textContent, 
 
     if (renderTaskRef.current) {
       renderTaskRef.current.cancel();
+      renderTaskRef.current = null;
     }
 
     const canvas = canvasRef.current;
@@ -32,8 +32,6 @@ const PdfViewer: React.FC<PdfViewerProps> = ({ pdfDoc, pageNumber, textContent, 
     
     canvas.height = viewport.height;
     canvas.width = viewport.width;
-    canvas.style.width = `${viewport.width}px`;
-    canvas.style.height = `${viewport.height}px`;
 
     textLayerDiv.innerHTML = '';
     textLayerDiv.style.width = `${viewport.width}px`;
@@ -42,7 +40,17 @@ const PdfViewer: React.FC<PdfViewerProps> = ({ pdfDoc, pageNumber, textContent, 
     const renderPage = async () => {
       try {
         const page = await pdfDoc.getPage(pageNumber);
-        const renderTask = page.render({ canvasContext: context, viewport: viewport });
+        
+        // Ensure rendering is not cancelled before starting.
+        if (renderTaskRef.current) {
+          return;
+        }
+
+        const renderContext = {
+          canvasContext: context,
+          viewport: viewport,
+        };
+        const renderTask = page.render(renderContext);
         renderTaskRef.current = renderTask;
         
         await renderTask.promise;
@@ -54,22 +62,15 @@ const PdfViewer: React.FC<PdfViewerProps> = ({ pdfDoc, pageNumber, textContent, 
                 viewport: viewport,
             });
             textLayer.render();
-            
-            // Apply highlight
-            const spans = textLayerDiv.querySelectorAll<HTMLElement>('span');
-            spans.forEach((span, index) => {
-                if(index === highlightedIndex) {
-                    span.style.backgroundColor = 'rgba(126, 87, 194, 0.4)'; // Accent color with opacity
-                    span.style.borderRadius = '2px';
-                }
-            });
         }
       } catch (error: any) {
         if (error.name !== 'RenderingCancelledException') {
           console.error('Error rendering page:', error);
         }
       } finally {
-        renderTaskRef.current = null;
+        if (renderTaskRef.current) {
+            renderTaskRef.current = null;
+        }
       }
     };
 
@@ -78,17 +79,18 @@ const PdfViewer: React.FC<PdfViewerProps> = ({ pdfDoc, pageNumber, textContent, 
     return () => {
       if (renderTaskRef.current) {
         renderTaskRef.current.cancel();
+        renderTaskRef.current = null;
       }
     };
 
-  }, [pdfDoc, pageNumber, textContent, viewport, highlightedIndex]);
+  }, [pdfDoc, pageNumber, textContent, viewport]);
   
   return (
     <div className="relative mx-auto shadow-lg" style={{ width: viewport?.width, height: viewport?.height }}>
-      <canvas ref={canvasRef} />
+      <canvas ref={canvasRef} className="w-full h-full" />
       <div 
         ref={textLayerRef}
-        className="textLayer absolute top-0 left-0"
+        className="textLayer absolute top-0 left-0 w-full h-full"
       />
     </div>
   );

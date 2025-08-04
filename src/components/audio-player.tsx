@@ -3,7 +3,7 @@
 import React from 'react';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Play, Pause, ArrowLeft, ArrowRight, Loader2 } from 'lucide-react';
+import { Play, Pause, ArrowLeft, ArrowRight, Loader2, Volume2 } from 'lucide-react';
 import { Card } from './ui/card';
 import type { AvailableVoicesOutput } from '@/ai/flows/voice-selection';
 
@@ -18,6 +18,7 @@ type AudioPlayerProps = {
   availableVoices: AvailableVoicesOutput;
   selectedVoice: string | null;
   onVoiceChange: (voice: string | null) => void;
+  onPreviewVoice: (voice: string) => void;
 };
 
 const AudioPlayer: React.FC<AudioPlayerProps> = ({
@@ -31,6 +32,7 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
   availableVoices,
   selectedVoice,
   onVoiceChange,
+  onPreviewVoice,
 }) => {
   return (
     <footer className="sticky bottom-0 left-0 right-0 w-full p-2 md:p-4 bg-transparent z-50">
@@ -85,9 +87,23 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
               </SelectTrigger>
               <SelectContent>
                 {availableVoices.map((voice) => (
-                  <SelectItem key={voice.name} value={voice.name}>
-                    {voice.name} ({voice.lang})
-                  </SelectItem>
+                  <div key={voice.name} className="flex items-center justify-between pr-2">
+                    <SelectItem value={voice.name} className="flex-1">
+                      {voice.name} ({voice.lang})
+                    </SelectItem>
+                    <Button 
+                      variant="ghost" 
+                      size="icon" 
+                      className="h-7 w-7 ml-2 shrink-0"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onPreviewVoice(voice.name);
+                      }}
+                      aria-label={`Preview voice ${voice.name}`}
+                    >
+                      <Volume2 className="h-4 w-4" />
+                    </Button>
+                  </div>
                 ))}
               </SelectContent>
             </Select>

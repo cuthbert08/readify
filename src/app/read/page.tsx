@@ -2,8 +2,8 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import * as pdfjsLib from 'pdfjs-dist';
-import type { PDFDocumentProxy, TextContent, PageViewport } from 'pdfjs-dist/types/src/display/api';
-import { UploadCloud, FileText, Loader2, LogOut, Save, Library, BookOpen } from 'lucide-react';
+import type { PDFDocumentProxy, TextContent, PageViewport, RenderTask } from 'pdfjs-dist/types/src/display/api';
+import { UploadCloud, FileText, Loader2, LogOut, Save, Library, Download } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import PdfViewer from '@/components/pdf-viewer';
 import AudioPlayer from '@/components/audio-player';
@@ -11,7 +11,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { getAvailableVoices, AvailableVoicesOutput } from '@/ai/flows/voice-selection';
-import { generateSpeech } from '@/ai/flows/tts-flow';
+import { generateSpeech, previewSpeech } from '@/ai/flows/tts-flow';
 import { Sidebar, SidebarProvider, SidebarTrigger, SidebarContent, SidebarHeader, SidebarMenu, SidebarMenuItem, SidebarMenuButton, SidebarFooter } from '@/components/ui/sidebar';
 import { getDocuments, saveDocument, Document } from '@/lib/db';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -27,6 +27,7 @@ type ActiveDocument = {
   file: File | null;
   doc: PDFDocumentProxy | null;
   url: string | null;
+  audioUrl?: string | null;
 };
 
 export default function ReadPage() {
@@ -45,15 +46,17 @@ export default function ReadPage() {
   const [isSaving, setIsSaving] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [isGeneratingSpeech, setIsGeneratingSpeech] = useState(false);
+  const [generatedAudioUrl, setGeneratedAudioUrl] = useState<string | null>(null);
 
   const [availableVoices, setAvailableVoices] = useState<AvailableVoicesOutput>([]);
-  const [selectedVoice, setSelectedVoice] = useState<string>('alloy');
+  const [selectedVoice, setSelectedVoice] = useState<string>('Algenib');
   
   const [userDocuments, setUserDocuments] = useState<Document[]>([]);
 
   const { toast } = useToast();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const previewAudioRef = useRef<HTMLAudioElement | null>(null);
   const router = useRouter();
 
   const fetchUserDocuments = useCallback(async () => {
@@ -95,13 +98,14 @@ export default function ReadPage() {
   const loadPage = useCallback(async (pageNumber: number, doc: PDFDocumentProxy) => {
     try {
       const page = await doc.getPage(pageNumber);
-      const viewport = page.getViewport({ scale: 1.5 });
+      const viewport = page.getViewport({ scale: 2 });
       setViewport(viewport);
 
       const content = await page.getTextContent();
       setTextContent(content);
       const currentText = content.items.map(item => (item as any).str).join(' ');
       setPageText(currentText);
+      setGeneratedAudioUrl(null); // Reset audio when page changes
 
     } catch (error) {
       console.error('Failed to load page:', error);
@@ -180,11 +184,11 @@ export default function ReadPage() {
 
       if (!response.ok) throw new Error('Upload failed');
       
-      const { downloadUrl } = await response.json();
+      const { url: pdfUrl } = await response.json();
       
       const newDoc = await saveDocument({
         fileName: activeDoc.file.name,
-        pdfUrl: downloadUrl,
+        pdfUrl: pdfUrl,
         currentPage: currentPage,
         totalPages: totalPages,
       });
@@ -224,6 +228,7 @@ export default function ReadPage() {
       setIsGeneratingSpeech(false);
 
       if (audioDataUri && audioRef.current) {
+        setGeneratedAudioUrl(audioDataUri);
         audioRef.current.src = audioDataUri;
         audioRef.current.play();
         setIsSpeaking(true);
@@ -238,6 +243,21 @@ export default function ReadPage() {
     }
   };
 
+  const handlePreviewVoice = async (voice: string) => {
+    try {
+      const { audioDataUri } = await previewSpeech({ 
+        text: "Hello! This is a preview of my voice.", 
+        voice: voice 
+      });
+      if (audioDataUri && previewAudioRef.current) {
+        previewAudioRef.current.src = audioDataUri;
+        previewAudioRef.current.play();
+      }
+    } catch (error) {
+      toast({ variant: "destructive", title: "Audio Error", description: "Could not preview voice." });
+    }
+  }
+
   const changePage = (offset: number) => {
     if (!activeDoc?.doc) return;
     const newPage = currentPage + offset;
@@ -247,12 +267,12 @@ export default function ReadPage() {
         audioRef.current.src = '';
       }
       setIsSpeaking(false);
+      setGeneratedAudioUrl(null);
       setCurrentPage(newPage);
       loadPage(newPage, activeDoc.doc);
     }
   };
   
-  // Update saved progress
   useEffect(() => {
     if (activeDoc?.id && !isSaving) {
       const timer = setTimeout(() => {
@@ -283,7 +303,7 @@ export default function ReadPage() {
         return (
           <div className="flex-1 flex flex-col items-center w-full overflow-hidden">
             <div className="flex-1 overflow-auto w-full p-4 md:p-8">
-              <PdfViewer pdfDoc={activeDoc?.doc || null} pageNumber={currentPage} textContent={textContent} viewport={viewport} highlightedIndex={-1} />
+              <PdfViewer pdfDoc={activeDoc?.doc || null} pageNumber={currentPage} textContent={textContent} viewport={viewport} />
             </div>
           </div>
         );
@@ -345,7 +365,7 @@ export default function ReadPage() {
           <SidebarFooter>
             <div className="flex items-center gap-3 p-2">
               <Avatar>
-                <AvatarImage src="https://placehold.co/40x40.png" />
+                <AvatarImage data-ai-hint="user avatar" src="https://placehold.co/40x40.png" />
                 <AvatarFallback>U</AvatarFallback>
               </Avatar>
               <div className="flex-1 overflow-hidden">
@@ -372,6 +392,14 @@ export default function ReadPage() {
                     Save
                   </Button>
                 )}
+                 {pdfState === 'loaded' && generatedAudioUrl && (
+                  <a href={generatedAudioUrl} download={`${fileName || 'audio'}-page-${currentPage}.wav`}>
+                    <Button variant="outline">
+                      <Download className="mr-2"/>
+                      Download Audio
+                    </Button>
+                  </a>
+                )}
               </div>
             </header>
             <main className="flex-1 flex items-center justify-center p-4">
@@ -389,10 +417,12 @@ export default function ReadPage() {
                 availableVoices={availableVoices}
                 selectedVoice={selectedVoice}
                 onVoiceChange={setSelectedVoice}
+                onPreviewVoice={handlePreviewVoice}
               />
             )}
         </div>
         <audio ref={audioRef} onEnded={() => setIsSpeaking(false)} hidden />
+        <audio ref={previewAudioRef} hidden />
       </div>
     </SidebarProvider>
   );

@@ -9,7 +9,8 @@
 
 import { ai } from '@/ai/genkit';
 import { z } from 'genkit';
-// import { openAI } from '@genkit-ai/openai';
+import wav from 'wav';
+import { googleAI } from '@genkit-ai/googleai';
 
 const GenerateSpeechInputSchema = z.object({
   text: z.string().describe('The text to be converted to speech.'),
@@ -18,19 +19,37 @@ const GenerateSpeechInputSchema = z.object({
 export type GenerateSpeechInput = z.infer<typeof GenerateSpeechInputSchema>;
 
 const GenerateSpeechOutputSchema = z.object({
-  audioDataUri: z.string().describe("A data URI of the generated audio file. Expected format: 'data:audio/mpeg;base64,<encoded_data>'."),
+  audioDataUri: z.string().describe("A data URI of the generated audio file. Expected format: 'data:audio/wav;base64,<encoded_data>'."),
 });
 export type GenerateSpeechOutput = z.infer<typeof GenerateSpeechOutputSchema>;
 
-export async function generateSpeech(input: GenerateSpeechInput): Promise<GenerateSpeechOutput> {
-  // Since the OpenAI plugin is causing issues, we'll return an empty response for now.
-  // This allows the rest of the application to function.
-  console.warn("OpenAI TTS is currently disabled due to a package installation issue.");
-  return { audioDataUri: '' };
-  // return ttsFlow(input);
+async function toWav(
+  pcmData: Buffer,
+  channels = 1,
+  rate = 24000,
+  sampleWidth = 2
+): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const writer = new wav.Writer({
+      channels,
+      sampleRate: rate,
+      bitDepth: sampleWidth * 8,
+    });
+
+    let bufs = [] as any[];
+    writer.on('error', reject);
+    writer.on('data', function (d) {
+      bufs.push(d);
+    });
+    writer.on('end', function () {
+      resolve(Buffer.concat(bufs).toString('base64'));
+    });
+
+    writer.write(pcmData);
+    writer.end();
+  });
 }
 
-/*
 const ttsFlow = ai.defineFlow(
   {
     name: 'ttsFlow',
@@ -39,20 +58,38 @@ const ttsFlow = ai.defineFlow(
   },
   async (input) => {
     const { media } = await ai.generate({
-      model: openAI.tts1(),
-      prompt: input.text,
+      model: googleAI.model('gemini-2.5-flash-preview-tts'),
       config: {
-        voice: input.voice as any, // alloy, echo, fable, onyx, nova, and shimmer
+        responseModalities: ['AUDIO'],
+        speechConfig: {
+          voiceConfig: {
+            prebuiltVoiceConfig: { voiceName: input.voice as any },
+          },
+        },
       },
+      prompt: input.text,
     });
 
     if (!media) {
       throw new Error('no media returned');
     }
+
+    const audioBuffer = Buffer.from(
+      media.url.substring(media.url.indexOf(',') + 1),
+      'base64'
+    );
     
     return {
-      audioDataUri: media.url,
+      audioDataUri: 'data:audio/wav;base64,' + (await toWav(audioBuffer)),
     };
   }
 );
-*/
+
+
+export async function generateSpeech(input: GenerateSpeechInput): Promise<GenerateSpeechOutput> {
+  return ttsFlow(input);
+}
+
+export async function previewSpeech(input: GenerateSpeechInput): Promise<GenerateSpeechOutput> {
+  return ttsFlow(input);
+}
