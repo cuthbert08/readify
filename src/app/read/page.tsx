@@ -58,7 +58,7 @@ export default function ReadPage() {
     const [isSpeaking, setIsSpeaking] = useState(false);
     const [isGeneratingSpeech, setIsGeneratingSpeech] = useState(false);
     const [generatedAudioUrl, setGeneratedAudioUrl] = useState<string | null>(null);
-    const [audioProgress, setAudioProgress]_useState(0);
+    const [audioProgress, setAudioProgress] = useState(0);
     const [audioDuration, setAudioDuration] = useState(0);
     const [audioCurrentTime, setAudioCurrentTime] = useState(0);
   
