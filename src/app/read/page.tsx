@@ -4,7 +4,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import * as pdfjsLib from 'pdfjs-dist';
 import type { PDFDocumentProxy } from 'pdfjs-dist/types/src/display/api';
-import { UploadCloud, FileText, Loader2, LogOut, Save, Library, Download, Bot, Lightbulb, HelpCircle, Cloud, CloudOff, Settings, Menu, Home, BarChart, BookOpenCheck, BrainCircuit, Mic } from 'lucide-react';
+import { UploadCloud, FileText, Loader2, LogOut, Save, Library, Download, Bot, Lightbulb, HelpCircle, Cloud, CloudOff, Settings, Menu, Home, BarChart, BookOpenCheck, BrainCircuit, Mic, FastForward, Rewind, Wind, Maximize, Minimize, ZoomIn, ZoomOut } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import PdfViewer, { TextItem } from '@/components/pdf-viewer';
 import AudioPlayer from '@/components/audio-player';
@@ -392,6 +392,10 @@ export default function ReadPage() {
         toast({ title: "Cleaning up text...", description: "AI is removing headers and footers." });
         
         const { cleanedText } = await cleanPdfText({ rawText: documentText });
+
+        if (!cleanedText || !cleanedText.trim()) {
+            throw new Error("No readable content found in the document after cleaning.");
+        }
 
         toast({ title: "Generating audio...", description: "This may take a moment." });
 
@@ -973,3 +977,5 @@ export default function ReadPage() {
       </TooltipProvider>
     );
 }
+
+    

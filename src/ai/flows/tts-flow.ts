@@ -1,3 +1,4 @@
+
 'use server';
 
 /**
@@ -18,6 +19,10 @@ export const generateSpeech = ai.defineFlow(
   },
   async (input) => {
     
+    if (!input.text || !input.text.trim()) {
+        throw new Error("Input text cannot be empty.");
+    }
+
     // Generate speech from the text using OpenAI
     const { media: audioMedia } = await ai.generate({
       model: 'openai/tts-1',
@@ -57,3 +62,5 @@ export const generateSpeech = ai.defineFlow(
     }
   }
 );
+
+    
