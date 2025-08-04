@@ -35,7 +35,10 @@ export const generateSpeechWithTimingsFlow = ai.defineFlow(
       config: {
         voice: input.voice,
         speed: input.speakingRate || 1.0,
-        response_format: 'json'
+        response_format: 'mp3',
+        extra_body: {
+            timestamp_granularities: ["word"]
+        }
       },
     });
 
