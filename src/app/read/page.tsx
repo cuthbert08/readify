@@ -4,11 +4,10 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import * as pdfjsLib from 'pdfjs-dist';
 import type { PDFDocumentProxy } from 'pdfjs-dist/types/src/display/api';
-import { UploadCloud, FileText, Loader2, LogOut, Save, Library, Download, Bot, Lightbulb, HelpCircle, Cloud, CloudOff } from 'lucide-react';
+import { UploadCloud, FileText, Loader2, LogOut, Save, Library, Download, Bot, Lightbulb, HelpCircle, Cloud, CloudOff, Settings, Menu } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import PdfViewer from '@/components/pdf-viewer';
 import AudioPlayer from '@/components/audio-player';
-import PdfToolbar from '@/components/pdf-toolbar';
 import { useToast } from "@/hooks/use-toast";
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
@@ -23,6 +22,11 @@ import AiDialog, { AiDialogType } from '@/components/ai-dialog';
 import { Separator } from '@/components/ui/separator';
 import { cn } from '@/lib/utils';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Label } from '@/components/ui/label';
+import { Slider } from '@/components/ui/slider';
+import { Volume2 } from 'lucide-react';
+import { useMediaQuery } from '@/hooks/use-media-query';
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.mjs`;
 
@@ -55,6 +59,9 @@ export default function ReadPage() {
   
     const [availableVoices, setAvailableVoices] = useState<AvailableVoicesOutput>([]);
     const [selectedVoice, setSelectedVoice] = useState<string>('Algenib');
+    const [speakingRate, setSpeakingRate] = useState(1);
+    const [pitch, setPitch] = useState(0);
+    const [playbackRate, setPlaybackRate] = useState(1);
     
     const [userDocuments, setUserDocuments] = useState<Document[]>([]);
     
@@ -65,6 +72,7 @@ export default function ReadPage() {
     const [aiChatOutput, setAiChatOutput] = useState<ChatWithPdfOutput | null>(null);
     
     const [showControls, setShowControls] = useState(true);
+    const [isSidebarOpen, setIsSidebarOpen] = useState(true);
 
     const { toast } = useToast();
     const fileInputRef = useRef<HTMLInputElement>(null);
@@ -73,6 +81,12 @@ export default function ReadPage() {
     const viewerContainerRef = useRef<HTMLDivElement>(null);
     const controlsTimeoutRef = useRef<NodeJS.Timeout | null>(null);
     const router = useRouter();
+
+    const isDesktop = useMediaQuery("(min-width: 768px)");
+
+    useEffect(() => {
+      setIsSidebarOpen(isDesktop);
+    }, [isDesktop]);
 
     const fetchUserDocuments = useCallback(async () => {
       try {
@@ -276,7 +290,12 @@ export default function ReadPage() {
   
       try {
         setIsGeneratingSpeech(true);
-        const { audioDataUri } = await generateSpeech({ text: documentText, voice: selectedVoice });
+        const { audioDataUri } = await generateSpeech({ 
+            text: documentText, 
+            voice: selectedVoice,
+            speakingRate: speakingRate,
+            pitch: pitch
+        });
         setIsGeneratingSpeech(false);
   
         if (audioDataUri && audioRef.current) {
@@ -299,7 +318,6 @@ export default function ReadPage() {
     const handlePreviewVoice = async (voice: string) => {
       try {
         const { audioDataUri } = await previewSpeech({ 
-          text: "Hello! This is a preview of my voice.", 
           voice: voice 
         });
         if (audioDataUri && previewAudioRef.current) {
@@ -310,6 +328,12 @@ export default function ReadPage() {
         toast({ variant: "destructive", title: "Audio Error", description: "Could not preview voice." });
       }
     }
+
+    useEffect(() => {
+        if(audioRef.current) {
+            audioRef.current.playbackRate = playbackRate;
+        }
+    }, [playbackRate]);
   
     const handleAiAction = async (type: AiDialogType) => {
       if (!documentText) return;
@@ -344,7 +368,7 @@ export default function ReadPage() {
     }
   
     const toggleFullScreen = () => {
-      const element = viewerContainerRef.current;
+      const element = document.documentElement; // Use documentElement for whole page fullscreen
       if (!element) return;
   
       if (!document.fullscreenElement) {
@@ -423,7 +447,7 @@ export default function ReadPage() {
       <TooltipProvider>
         <div className="flex h-screen w-full bg-background">
           <input type="file" ref={fileInputRef} onChange={handleFileChange} accept="application/pdf" className="hidden" />
-          <Sidebar>
+          <Sidebar className={cn(!isSidebarOpen && "hidden")}>
             <SidebarHeader>
                <div className="flex items-center justify-between">
                   <h1 className="text-2xl font-headline text-primary">Readify</h1>
@@ -437,6 +461,53 @@ export default function ReadPage() {
                     Upload New PDF
                   </SidebarMenuButton>
                 </SidebarMenuItem>
+                 <Separator className="my-2" />
+                 <div>
+                    <div className="p-2 text-sm font-semibold flex items-center gap-2 text-muted-foreground">
+                        <Settings />
+                        Audio Settings
+                    </div>
+                    <div className="p-2 space-y-4">
+                        <div className='space-y-2'>
+                            <Label>Voice</Label>
+                            <Select value={selectedVoice} onValueChange={setSelectedVoice} disabled={isSpeaking || isGeneratingSpeech}>
+                                <SelectTrigger>
+                                    <SelectValue placeholder="Select a voice" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    {availableVoices.map((voice) => (
+                                    <div key={voice.name} className="flex items-center justify-between pr-2">
+                                        <SelectItem value={voice.name} className="flex-1">
+                                            {voice.name} ({voice.lang})
+                                        </SelectItem>
+                                        <Button 
+                                            variant="ghost" 
+                                            size="icon" 
+                                            className="h-7 w-7 ml-2 shrink-0"
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                handlePreviewVoice(voice.name);
+                                            }}
+                                            aria-label={`Preview voice ${voice.name}`}
+                                        >
+                                            <Volume2 className="h-4 w-4" />
+                                        </Button>
+                                    </div>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </div>
+                        <div className='space-y-2'>
+                           <Label htmlFor="speaking-rate">Speaking Rate: {speakingRate.toFixed(2)}x</Label>
+                           <Slider id="speaking-rate" min={0.25} max={4.0} step={0.25} value={[speakingRate]} onValueChange={(v) => setSpeakingRate(v[0])} disabled={isSpeaking || isGeneratingSpeech} />
+                        </div>
+                        <div className='space-y-2'>
+                           <Label htmlFor="pitch">Pitch: {pitch.toFixed(1)}</Label>
+                           <Slider id="pitch" min={-20} max={20} step={0.5} value={[pitch]} onValueChange={(v) => setPitch(v[0])} disabled={isSpeaking || isGeneratingSpeech}/>
+                        </div>
+                    </div>
+                 </div>
+
                 <Separator className="my-2" />
                  <div>
                   <div className="p-2 text-sm font-semibold flex items-center gap-2 text-muted-foreground">
@@ -469,12 +540,14 @@ export default function ReadPage() {
                       <FileText />
                       <div className="flex-1 flex items-center justify-between">
                         <span className="truncate max-w-[150px]">{fileName}</span>
-                        <Tooltip>
+                         <Tooltip>
                             <TooltipTrigger asChild>
-                                <CloudOff className="h-4 w-4 text-muted-foreground" />
+                                <Button variant="ghost" size="icon" className="h-7 w-7" onClick={handleSave} disabled={isSaving}>
+                                    {isSaving ? <Loader2 className="h-4 w-4 animate-spin"/> : <CloudOff className="h-4 w-4 text-muted-foreground" />}
+                                </Button>
                             </TooltipTrigger>
                             <TooltipContent>
-                                <p>Not saved to cloud</p>
+                                <p>Not saved. Click to save to cloud.</p>
                             </TooltipContent>
                         </Tooltip>
                       </div>
@@ -518,44 +591,38 @@ export default function ReadPage() {
             </SidebarFooter>
           </Sidebar>
           
-          <div className="flex flex-1 flex-col" ref={viewerContainerRef}>
-              <div className="relative flex-1 flex flex-col">
-                 {pdfState === 'loaded' && (
-                   <div className={cn("absolute inset-x-0 top-0 z-10 transition-opacity duration-300", showControls ? 'opacity-100' : 'opacity-0 pointer-events-none')}>
-                     <PdfToolbar
-                       fileName={fileName}
-                       zoomLevel={zoomLevel}
-                       onZoomIn={() => setZoomLevel(z => Math.min(z + 0.2, 3))}
-                       onZoomOut={() => setZoomLevel(z => Math.max(z - 0.2, 0.4))}
-                       onFullScreen={toggleFullScreen}
-                       isFullScreen={isFullScreen}
-                       showSave={!!activeDoc?.file || (!!activeDoc?.id && !activeDoc.audioUrl)}
-                       onSave={handleSave}
-                       isSaving={isSaving}
-                       showDownload={!!generatedAudioUrl}
-                       downloadUrl={generatedAudioUrl || ''}
-                       downloadFileName={`${fileName || 'audio'}.wav`}
-                     />
-                   </div>
-                 )}
-                 <main className="flex-1 flex items-center justify-center overflow-auto bg-muted/30">
-                   {renderContent()}
-                 </main>
-                 {pdfState === 'loaded' && (
-                   <div className={cn("absolute inset-x-0 bottom-0 z-10 transition-opacity duration-300", showControls ? 'opacity-100' : 'opacity-0 pointer-events-none')}>
-                       <AudioPlayer
-                           isSpeaking={isSpeaking}
-                           isGeneratingSpeech={isGeneratingSpeech}
-                           onPlayPause={handlePlayPause}
-                           availableVoices={availableVoices}
-                           selectedVoice={selectedVoice}
-                           onVoiceChange={setSelectedVoice}
-                           onPreviewVoice={handlePreviewVoice}
-                       />
-                   </div>
-                 )}
-              </div>
+          <div className="flex-1 flex flex-col relative" ref={viewerContainerRef}>
+            <header className="absolute top-0 left-0 z-10 p-2">
+                {!isSidebarOpen && (
+                    <Button variant="ghost" size="icon" onClick={() => setIsSidebarOpen(true)}>
+                        <Menu />
+                    </Button>
+                )}
+            </header>
+            <main className="flex-1 flex items-center justify-center overflow-auto bg-muted/30">
+                {renderContent()}
+            </main>
+            {pdfState === 'loaded' && (
+                <div className={cn("absolute inset-x-0 bottom-0 z-10 transition-opacity duration-300", showControls ? 'opacity-100' : 'opacity-0 pointer-events-none')}>
+                    <AudioPlayer
+                        isSpeaking={isSpeaking}
+                        isGeneratingSpeech={isGeneratingSpeech}
+                        onPlayPause={handlePlayPause}
+                        isFullScreen={isFullScreen}
+                        onFullScreen={toggleFullScreen}
+                        zoomLevel={zoomLevel}
+                        onZoomIn={() => setZoomLevel(z => Math.min(z + 0.2, 3))}
+                        onZoomOut={() => setZoomLevel(z => Math.max(z - 0.2, 0.4))}
+                        playbackRate={playbackRate}
+                        onPlaybackRateChange={setPlaybackRate}
+                        showDownload={!!generatedAudioUrl}
+                        downloadUrl={generatedAudioUrl || ''}
+                        downloadFileName={`${fileName || 'audio'}.wav`}
+                    />
+                </div>
+            )}
           </div>
+
           <audio ref={audioRef} onEnded={() => setIsSpeaking(false)} hidden />
           <audio ref={previewAudioRef} hidden />
           <AiDialog

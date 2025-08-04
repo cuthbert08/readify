@@ -15,6 +15,8 @@ import { googleAI } from '@genkit-ai/googleai';
 const GenerateSpeechInputSchema = z.object({
   text: z.string().describe('The text to be converted to speech.'),
   voice: z.string().describe('The voice to use for the speech synthesis.'),
+  speakingRate: z.number().min(0.25).max(4.0).optional().describe('The speaking rate, where 1.0 is the normal speed.'),
+  pitch: z.number().min(-20.0).max(20.0).optional().describe('The speaking pitch, where 0 is the normal pitch.'),
 });
 export type GenerateSpeechInput = z.infer<typeof GenerateSpeechInputSchema>;
 
@@ -65,6 +67,8 @@ const ttsFlow = ai.defineFlow(
           voiceConfig: {
             prebuiltVoiceConfig: { voiceName: input.voice as any },
           },
+          speakingRate: input.speakingRate,
+          pitch: input.pitch
         },
       },
       prompt: input.text,
@@ -90,6 +94,9 @@ export async function generateSpeech(input: GenerateSpeechInput): Promise<Genera
   return ttsFlow(input);
 }
 
-export async function previewSpeech(input: GenerateSpeechInput): Promise<GenerateSpeechOutput> {
-  return ttsFlow(input);
+export async function previewSpeech(input: Omit<GenerateSpeechInput, 'text' | 'speakingRate' | 'pitch'>): Promise<GenerateSpeechOutput> {
+  return ttsFlow({
+    ...input,
+    text: "Hello! This is a preview of my voice.",
+  });
 }
