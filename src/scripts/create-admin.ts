@@ -14,9 +14,9 @@ dotenv.config();
 // --- IMPORTANT ---
 // --- Fill in your admin details here before running the script ---
 const ADMIN_DETAILS = {
-  name: 'Super User',
-  email: 'admin@readify.com',
-  password: 'password123', // Choose a strong password
+  name: 'Cuthbert Ndikudze',
+  email: 'cutbertndikudze@gmail.com',
+  password: 'Mudharaa@1', // Choose a strong password
 };
 // -----------------------------------------------------------------
 

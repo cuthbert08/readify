@@ -27,12 +27,12 @@ export interface User {
 
 export async function getUserSession() {
   const session = await getSession();
-  if (session) {
+  if (session?.userId) {
     const user: User | null = await kv.get(`user-by-id:${session.userId}`);
     if (user) {
         return {
             ...session,
-            name: user.name, // Add name to the session object
+            name: user.name, // Add/confirm name from DB record
         };
     }
   }

@@ -1,7 +1,6 @@
 import { SignJWT, jwtVerify } from 'jose';
 import { cookies } from 'next/headers';
 import { NextRequest, NextResponse } from 'next/server';
-import type { User } from './db';
 
 const secretKey = process.env.JWT_SECRET || 'your-secret-key-for-development';
 const key = new TextEncoder().encode(secretKey);
@@ -34,19 +33,12 @@ export async function decrypt(input: string): Promise<SessionPayload | null> {
   }
 }
 
-export async function getSession() {
+export async function getSession(): Promise<SessionPayload | null> {
   const sessionCookie = cookies().get('session')?.value;
   if (!sessionCookie) return null;
   
   const session = await decrypt(sessionCookie);
-  if (!session) return null;
-
-  // Add user's name to the session data from the database
-  const user: User | null = await (await import('./db')).kv.get(`user-by-id:${session.userId}`);
-  return {
-    ...session,
-    name: user?.name || session.email,
-  };
+  return session;
 }
 
 export async function updateSession(request: NextRequest) {
