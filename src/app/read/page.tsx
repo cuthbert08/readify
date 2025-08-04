@@ -4,7 +4,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import * as pdfjsLib from 'pdfjs-dist';
 import type { PDFDocumentProxy } from 'pdfjs-dist/types/src/display/api';
-import { UploadCloud, FileText, Loader2, LogOut, Save, Library, Download, Bot, Lightbulb, HelpCircle, Cloud, CloudOff, Settings, Menu, Home, BarChart } from 'lucide-react';
+import { UploadCloud, FileText, Loader2, LogOut, Save, Library, Download, Bot, Lightbulb, HelpCircle, Cloud, CloudOff, Settings, Menu, Home, BarChart, TestTube2 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import PdfViewer from '@/components/pdf-viewer';
 import AudioPlayer from '@/components/audio-player';
@@ -28,6 +28,7 @@ import { Label } from '@/components/ui/label';
 import { Slider } from '@/components/ui/slider';
 import { Volume2 } from 'lucide-react';
 import { useMediaQuery } from '@/hooks/use-media-query';
+import { Input } from '@/components/ui/input';
 
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.mjs`;
@@ -50,7 +51,7 @@ export default function ReadPage() {
     const [currentPage, setCurrentPage] = useState(1);
     const [loadingProgress, setLoadingProgress] = useState(0);
     const [zoomLevel, setZoomLevel] = useState(1);
-    const [isFullScreen, setIsFullScreen] = useState(false);
+    const [isFullScreen, setIsFullScreen] = useState(isSaving);
   
     const [documentText, setDocumentText] = useState('');
   
@@ -74,6 +75,7 @@ export default function ReadPage() {
     
     const [showControls, setShowControls] = useState(true);
     const [isAdmin, setIsAdmin] = useState(false);
+    const [manualApiKey, setManualApiKey] = useState('');
 
     const { toast } = useToast();
     const fileInputRef = useRef<HTMLInputElement>(null);
@@ -323,7 +325,8 @@ export default function ReadPage() {
     const handlePreviewVoice = async (voice: string) => {
       try {
         const result = await previewSpeech({ 
-          voice: voice
+          voice: voice,
+          apiKey: manualApiKey || undefined,
         });
         if (result.audioDataUri && previewAudioRef.current) {
           previewAudioRef.current.src = result.audioDataUri;
@@ -534,6 +537,23 @@ export default function ReadPage() {
                       </SidebarMenuButton>
                     </SidebarMenuItem>
                   </div>
+                 <Separator className="my-2" />
+                  <div>
+                    <div className="p-2 text-sm font-semibold flex items-center gap-2 text-muted-foreground">
+                        <TestTube2 />
+                        Testing
+                    </div>
+                    <div className="p-2 space-y-2">
+                        <Label htmlFor="api-key-input">OpenAI API Key</Label>
+                        <Input
+                            id="api-key-input"
+                            type="password"
+                            placeholder="Paste your key for testing"
+                            value={manualApiKey}
+                            onChange={(e) => setManualApiKey(e.target.value)}
+                        />
+                    </div>
+                  </div>
                 <Separator className="my-2" />
                 <div>
                     <div className="p-2 text-sm font-semibold flex items-center gap-2 text-muted-foreground">
@@ -659,9 +679,3 @@ export default function ReadPage() {
       </TooltipProvider>
     );
 }
-
-    
-
-    
-
-

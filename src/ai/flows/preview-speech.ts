@@ -7,7 +7,7 @@
 
 import { ai } from '@/ai/genkit';
 import { openAI } from 'genkitx-openai';
-import { PreviewSpeechInputSchema, PreviewSpeechOutputSchema } from '@/ai/schemas';
+import { PreviewSpeechInputSchema, PreviewSpeechOutputSchema, type PreviewSpeechInput } from '@/ai/schemas';
 
 export const previewSpeech = ai.defineFlow(
   {
@@ -16,8 +16,11 @@ export const previewSpeech = ai.defineFlow(
     outputSchema: PreviewSpeechOutputSchema,
   },
   async (input) => {
+    
+    const openAiOptions = input.apiKey ? { apiKey: input.apiKey } : undefined;
+
     const { media } = await ai.generate({
-      model: openAI.model('tts-1'),
+      model: openAI.model('tts-1', openAiOptions),
       prompt: "Hello! This is a preview of my voice.",
       config: {
         voice: input.voice,
