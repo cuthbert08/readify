@@ -5,8 +5,6 @@
  *
  * Exports:
  *   - `getAvailableVoices`: Retrieves a list of available voices.
- *   - `setPreferredVoice`: Sets the user's preferred voice.
- *   - `getPreferredVoice`: Retrieves the user's preferred voice.
  *   - `AvailableVoicesOutput`: The output type for available voices.
  */
 
@@ -21,27 +19,17 @@ const AvailableVoicesOutputSchema = z.array(
 );
 export type AvailableVoicesOutput = z.infer<typeof AvailableVoicesOutputSchema>;
 
-const PreferredVoiceInputSchema = z.string();
-export type PreferredVoiceInput = z.infer<typeof PreferredVoiceInputSchema>;
-
-// Placeholder for voice list (replace with actual implementation)
+// OpenAI TTS-1 voices
 const availableVoices = [
-  {name: 'Algenib', lang: 'en-US'},
-  {name: 'Achernar', lang: 'en-GB'},
-  {name: 'Default', lang: 'en-US'},
+  { name: 'alloy', lang: 'en-US' },
+  { name: 'echo', lang: 'en-US' },
+  { name: 'fable', lang: 'en-US' },
+  { name: 'onyx', lang: 'en-US' },
+  { name: 'nova', lang: 'en-US' },
+  { name: 'shimmer', lang: 'en-US' },
+  { name: 'Default', lang: 'en-US' }, // Placeholder for default browser voice if needed elsewhere
 ];
 
 export async function getAvailableVoices(): Promise<AvailableVoicesOutput> {
-  return availableVoices;
-}
-
-// Placeholder for storing preferred voice (replace with actual implementation)
-let preferredVoice: string | null = null;
-
-export async function setPreferredVoice(voice: PreferredVoiceInput): Promise<void> {
-  preferredVoice = voice;
-}
-
-export async function getPreferredVoice(): Promise<string | null> {
-  return preferredVoice;
+  return availableVoices.filter(v => v.name !== 'Default');
 }

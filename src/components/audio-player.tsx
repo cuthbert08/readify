@@ -3,23 +3,26 @@
 import React from 'react';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Play, Pause, ArrowLeft, ArrowRight } from 'lucide-react';
+import { Play, Pause, ArrowLeft, ArrowRight, Loader2 } from 'lucide-react';
 import { Card } from './ui/card';
+import type { AvailableVoicesOutput } from '@/ai/flows/voice-selection';
 
 type AudioPlayerProps = {
   isSpeaking: boolean;
+  isGeneratingSpeech: boolean;
   onPlayPause: () => void;
   currentPage: number;
   totalPages: number;
   onPrevPage: () => void;
   onNextPage: () => void;
-  availableVoices: SpeechSynthesisVoice[];
-  selectedVoice: SpeechSynthesisVoice | null;
-  onVoiceChange: (voice: SpeechSynthesisVoice | null) => void;
+  availableVoices: AvailableVoicesOutput;
+  selectedVoice: string | null;
+  onVoiceChange: (voice: string | null) => void;
 };
 
 const AudioPlayer: React.FC<AudioPlayerProps> = ({
   isSpeaking,
+  isGeneratingSpeech,
   onPlayPause,
   currentPage,
   totalPages,
@@ -38,7 +41,7 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
               variant="ghost"
               size="icon"
               onClick={onPrevPage}
-              disabled={currentPage <= 1 || isSpeaking}
+              disabled={currentPage <= 1 || isSpeaking || isGeneratingSpeech}
               aria-label="Previous Page"
             >
               <ArrowLeft className="h-5 w-5" />
@@ -50,7 +53,7 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
               variant="ghost"
               size="icon"
               onClick={onNextPage}
-              disabled={currentPage >= totalPages || isSpeaking}
+              disabled={currentPage >= totalPages || isSpeaking || isGeneratingSpeech}
               aria-label="Next Page"
             >
               <ArrowRight className="h-5 w-5" />
@@ -62,18 +65,20 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
             size="lg" 
             className="rounded-full w-16 h-16 bg-primary hover:bg-primary/90 text-primary-foreground"
             aria-label={isSpeaking ? 'Pause' : 'Play'}
+            disabled={isGeneratingSpeech}
           >
-            {isSpeaking ? <Pause className="h-8 w-8" /> : <Play className="h-8 w-8" />}
+            {isGeneratingSpeech ? (
+              <Loader2 className="h-8 w-8 animate-spin" />
+            ) : (
+              isSpeaking ? <Pause className="h-8 w-8" /> : <Play className="h-8 w-8" />
+            )}
           </Button>
 
           <div className="w-48">
             <Select
-              value={selectedVoice?.name}
-              onValueChange={(name) => {
-                const voice = availableVoices.find(v => v.name === name) || null;
-                onVoiceChange(voice);
-              }}
-              disabled={isSpeaking}
+              value={selectedVoice || ''}
+              onValueChange={(name) => onVoiceChange(name)}
+              disabled={isSpeaking || isGeneratingSpeech}
             >
               <SelectTrigger aria-label="Select Voice">
                 <SelectValue placeholder="Select a voice" />
