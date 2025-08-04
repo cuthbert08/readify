@@ -85,7 +85,8 @@ export async function deleteUser(userId: string): Promise<{ success: boolean; me
     const docIds: string[] = await kv.lrange(docListKey, 0, -1);
     
     if (docIds.length > 0) {
-      const docKeysToDelete = docIds.map(id => `doc:${id}`);
+      const validDocIds = docIds.filter(id => id);
+      const docKeysToDelete = validDocIds.map(id => `doc:${id}`);
       // @ts-ignore
       pipeline.del(...docKeysToDelete);
     }

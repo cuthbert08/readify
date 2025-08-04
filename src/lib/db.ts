@@ -62,6 +62,7 @@ export async function saveDocument(docData: {
   const userId = session.userId;
 
   let docId = docData.id;
+  const userDocListKey = `user:${userId}:docs`;
 
   if (docId) {
     const existingDocRaw: Document | null = await kv.get(`doc:${docId}`);
@@ -69,7 +70,8 @@ export async function saveDocument(docData: {
         throw new Error('Document not found.');
     }
     
-    if (existingDocRaw.userId !== userId) {
+    // Admins can edit any doc, users can only edit their own
+    if (!session.isAdmin && existingDocRaw.userId !== userId) {
       throw new Error('Access denied.');
     }
     const updatedDoc: Document = {
@@ -94,10 +96,11 @@ export async function saveDocument(docData: {
       zoomLevel: docData.zoomLevel || 1,
       createdAt: new Date().toISOString(),
     };
-    await kv.set(`doc:${docId}`, newDoc);
     
-    const userDocListKey = `user:${userId}:docs`;
-    await kv.lpush(userDocListKey, docId);
+    const pipeline = kv.pipeline();
+    pipeline.set(`doc:${docId}`, newDoc);
+    pipeline.lpush(userDocListKey, docId);
+    await pipeline.exec();
 
     return newDoc;
   }
@@ -116,7 +119,13 @@ export async function getDocuments(): Promise<Document[]> {
     return [];
   }
 
-  const docs = await kv.mget<Document[]>(...docIds.map(id => `doc:${id}`));
+  // Filter out potential null/undefined values from lrange result before fetching
+  const validDocIds = docIds.filter(id => id);
+  if (validDocIds.length === 0) {
+    return [];
+  }
+
+  const docs = await kv.mget<Document[]>(...validDocIds.map(id => `doc:${id}`));
 
   return docs
     .filter((doc): doc is Document => doc !== null)
