@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useRef, useEffect } from 'react';
-import type { PDFDocumentProxy, TextContent, PageViewport } from 'pdfjs-dist/types/src/display/api';
+import type { PDFDocumentProxy, TextContent, PageViewport, RenderTask } from 'pdfjs-dist/types/src/display/api';
 import { TextLayer } from 'pdfjs-dist/build/pdf';
 
 type PdfViewerProps = {
@@ -15,9 +15,14 @@ type PdfViewerProps = {
 const PdfViewer: React.FC<PdfViewerProps> = ({ pdfDoc, pageNumber, textContent, viewport, highlightedIndex }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const textLayerRef = useRef<HTMLDivElement>(null);
+  const renderTaskRef = useRef<RenderTask | null>(null);
 
   useEffect(() => {
     if (!pdfDoc || !canvasRef.current || !textLayerRef.current || !viewport) return;
+
+    if (renderTaskRef.current) {
+      renderTaskRef.current.cancel();
+    }
 
     const canvas = canvasRef.current;
     const textLayerDiv = textLayerRef.current;
@@ -34,11 +39,14 @@ const PdfViewer: React.FC<PdfViewerProps> = ({ pdfDoc, pageNumber, textContent, 
     textLayerDiv.style.width = `${viewport.width}px`;
     textLayerDiv.style.height = `${viewport.height}px`;
 
-    const renderTask = pdfDoc.getPage(pageNumber).then(page => {
-      return page.render({ canvasContext: context, viewport: viewport }).promise;
-    });
+    const renderPage = async () => {
+      try {
+        const page = await pdfDoc.getPage(pageNumber);
+        const renderTask = page.render({ canvasContext: context, viewport: viewport });
+        renderTaskRef.current = renderTask;
+        
+        await renderTask.promise;
 
-    renderTask.then(() => {
         if (textContent) {
             const textLayer = new TextLayer({
                 textContentSource: textContent,
@@ -56,7 +64,22 @@ const PdfViewer: React.FC<PdfViewerProps> = ({ pdfDoc, pageNumber, textContent, 
                 }
             });
         }
-    });
+      } catch (error: any) {
+        if (error.name !== 'RenderingCancelledException') {
+          console.error('Error rendering page:', error);
+        }
+      } finally {
+        renderTaskRef.current = null;
+      }
+    };
+
+    renderPage();
+
+    return () => {
+      if (renderTaskRef.current) {
+        renderTaskRef.current.cancel();
+      }
+    };
 
   }, [pdfDoc, pageNumber, textContent, viewport, highlightedIndex]);
   
