@@ -23,6 +23,11 @@ export interface User {
     createdAt: number;
 }
 
+// This function is safe to call from client components as it's a server action.
+export async function getUserSession() {
+  return await getSession();
+}
+
 // Function to save or update a document's metadata
 export async function saveDocument(docData: {
   id?: string;
@@ -98,58 +103,4 @@ export async function getDocuments(): Promise<Document[]> {
   const docs = await kv.mget<Document[]>(...docIds.map(id => `doc:${id}`));
 
   return docs.filter(doc => doc !== null).sort((a,b) => b.createdAt - a.createdAt);
-}
-
-
-// --- Admin Functions ---
-
-async function
-isAdmin() {
-    const session = await getSession();
-    if (!session?.isAdmin) {
-        throw new Error('Unauthorized');
-    }
-}
-
-export async function getAllUsers(): Promise<User[]> {
-    await isAdmin();
-    const userKeys = await kv.keys('user-by-id:*');
-    if (userKeys.length === 0) return [];
-    const users = await kv.mget<User[]>(...userKeys);
-    return users.filter(u => u !== null).sort((a, b) => b.createdAt - a.createdAt);
-}
-
-export async function getAllDocuments(): Promise<Document[]> {
-    await isAdmin();
-    const docKeys = await kv.keys('doc:*');
-    if (docKeys.length === 0) return [];
-    const docs = await kv.mget<Document[]>(...docKeys);
-    return docs.filter(d => d !== null).sort((a, b) => b.createdAt - a.createdAt);
-}
-
-export async function getUserDocCount(userId: string): Promise<number> {
-    await isAdmin();
-    return await kv.llen(`user:${userId}:docs`);
-}
-
-export async function deleteUser(userId: string) {
-    await isAdmin();
-    
-    const user = await kv.get<User>(`user-by-id:${userId}`);
-    if (!user) throw new Error('User not found');
-
-    const docIds = await kv.lrange(`user:${user.id}:docs`, 0, -1);
-    
-    const pipeline = kv.pipeline();
-    // Delete all documents
-    if(docIds.length > 0) {
-      docIds.forEach(id => pipeline.del(`doc:${id}`));
-    }
-    // Delete user's doc list
-    pipeline.del(`user:${user.id}:docs`);
-    // Delete user objects
-    pipeline.del(`user-by-id:${userId}`);
-    pipeline.del(`user:${user.email}`);
-
-    await pipeline.exec();
 }

@@ -16,7 +16,7 @@ import { generateSpeech, previewSpeech } from '@/ai/flows/tts-flow';
 import { summarizePdf, SummarizePdfOutput } from '@/ai/flows/summarize-pdf';
 import { chatWithPdf, ChatWithPdfOutput } from '@/ai/flows/chat-with-pdf';
 import { Sidebar, SidebarHeader, SidebarMenu, SidebarMenuItem, SidebarMenuButton, SidebarFooter, SidebarContent } from '@/components/ui/sidebar';
-import { getDocuments, saveDocument, Document } from '@/lib/db';
+import { getDocuments, saveDocument, Document, getUserSession } from '@/lib/db';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import AiDialog, { AiDialogType } from '@/components/ai-dialog';
 import { Separator } from '@/components/ui/separator';
@@ -27,7 +27,6 @@ import { Label } from '@/components/ui/label';
 import { Slider } from '@/components/ui/slider';
 import { Volume2 } from 'lucide-react';
 import { useMediaQuery } from '@/hooks/use-media-query';
-import { getSession } from '@/lib/session';
 
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.mjs`;
@@ -86,7 +85,7 @@ export default function ReadPage() {
 
     useEffect(() => {
       async function checkSession() {
-        const session = await getSession();
+        const session = await getUserSession();
         if (session?.isAdmin) {
           setIsAdmin(true);
         }
