@@ -234,7 +234,7 @@ export default function AdminPage() {
                   <TableHeader>
                     <TableRow>
                       <TableHead>File Name</TableHead>
-                      <TableHead>User ID</TableHead>
+                      <TableHead>Owner (User ID)</TableHead>
                       <TableHead>Uploaded</TableHead>
                       <TableHead>Link</TableHead>
                     </TableRow>
