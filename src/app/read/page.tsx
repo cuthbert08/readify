@@ -4,7 +4,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import * as pdfjsLib from 'pdfjs-dist';
 import type { PDFDocumentProxy } from 'pdfjs-dist/types/src/display/api';
-import { UploadCloud, FileText, Loader2, LogOut, Save, Library, Download, Bot, Lightbulb, HelpCircle } from 'lucide-react';
+import { UploadCloud, FileText, Loader2, LogOut, Save, Library, Download, Bot, Lightbulb, HelpCircle, Cloud, CloudOff } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import PdfViewer from '@/components/pdf-viewer';
 import AudioPlayer from '@/components/audio-player';
@@ -22,6 +22,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import AiDialog, { AiDialogType } from '@/components/ai-dialog';
 import { Separator } from '@/components/ui/separator';
 import { cn } from '@/lib/utils';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.mjs`;
 
@@ -419,6 +420,7 @@ export default function ReadPage() {
     };
   
     return (
+      <TooltipProvider>
         <div className="flex h-screen w-full bg-background">
           <input type="file" ref={fileInputRef} onChange={handleFileChange} accept="application/pdf" className="hidden" />
           <Sidebar>
@@ -461,13 +463,38 @@ export default function ReadPage() {
                     My Documents
                    </div>
                 </div>
+                {activeDoc && !activeDoc.id && (
+                  <SidebarMenuItem>
+                    <SidebarMenuButton variant="ghost" isActive={true}>
+                      <FileText />
+                      <div className="flex-1 flex items-center justify-between">
+                        <span className="truncate max-w-[150px]">{fileName}</span>
+                        <Tooltip>
+                            <TooltipTrigger asChild>
+                                <CloudOff className="h-4 w-4 text-muted-foreground" />
+                            </TooltipTrigger>
+                            <TooltipContent>
+                                <p>Not saved to cloud</p>
+                            </TooltipContent>
+                        </Tooltip>
+                      </div>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                )}
                   {userDocuments.map((doc) => (
                      <SidebarMenuItem key={doc.id}>
                         <SidebarMenuButton variant="ghost" onClick={() => handleSelectDocument(doc)} isActive={activeDoc?.id === doc.id}>
                           <FileText />
-                          <div className="flex flex-col items-start">
-                             <span className="truncate max-w-[150px]">{doc.fileName}</span>
-                             <span className="text-xs text-muted-foreground">{doc.totalPages} pages</span>
+                          <div className="flex-1 flex items-center justify-between">
+                            <span className="truncate max-w-[150px]">{doc.fileName}</span>
+                             <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Cloud className="h-4 w-4 text-primary" />
+                                </TooltipTrigger>
+                                <TooltipContent>
+                                    <p>Saved to cloud</p>
+                                </TooltipContent>
+                            </Tooltip>
                           </div>
                         </SidebarMenuButton>
                      </SidebarMenuItem>
@@ -541,5 +568,6 @@ export default function ReadPage() {
             onChatSubmit={handleAiChat}
           />
         </div>
+      </TooltipProvider>
     );
 }
