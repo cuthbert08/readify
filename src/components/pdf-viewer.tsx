@@ -2,7 +2,7 @@
 
 import React, { useRef, useEffect } from 'react';
 import type { PDFDocumentProxy, TextContent, PageViewport } from 'pdfjs-dist/types/src/display/api';
-import * as pdfjsLib from 'pdfjs-dist';
+import { TextLayer } from 'pdfjs-dist/build/pdf';
 
 type PdfViewerProps = {
   pdfDoc: PDFDocumentProxy | null;
@@ -20,15 +20,19 @@ const PdfViewer: React.FC<PdfViewerProps> = ({ pdfDoc, pageNumber, textContent, 
     if (!pdfDoc || !canvasRef.current || !textLayerRef.current || !viewport) return;
 
     const canvas = canvasRef.current;
-    const textLayer = textLayerRef.current;
+    const textLayerDiv = textLayerRef.current;
     const context = canvas.getContext('2d');
 
     if (!context) return;
     
     canvas.height = viewport.height;
     canvas.width = viewport.width;
-    textLayer.style.width = `${viewport.width}px`;
-    textLayer.style.height = `${viewport.height}px`;
+    canvas.style.width = `${viewport.width}px`;
+    canvas.style.height = `${viewport.height}px`;
+
+    textLayerDiv.innerHTML = '';
+    textLayerDiv.style.width = `${viewport.width}px`;
+    textLayerDiv.style.height = `${viewport.height}px`;
 
     const renderTask = pdfDoc.getPage(pageNumber).then(page => {
       return page.render({ canvasContext: context, viewport: viewport }).promise;
@@ -36,18 +40,15 @@ const PdfViewer: React.FC<PdfViewerProps> = ({ pdfDoc, pageNumber, textContent, 
 
     renderTask.then(() => {
         if (textContent) {
-            textLayer.innerHTML = '';
-            const textLayerFragment = document.createDocumentFragment();
-            pdfjsLib.renderTextLayer({
+            const textLayer = new TextLayer({
                 textContentSource: textContent,
-                container: textLayerFragment,
+                container: textLayerDiv,
                 viewport: viewport,
-                textDivs: []
             });
-            textLayer.appendChild(textLayerFragment);
+            textLayer.render();
             
             // Apply highlight
-            const spans = textLayer.querySelectorAll<HTMLElement>('span');
+            const spans = textLayerDiv.querySelectorAll<HTMLElement>('span');
             spans.forEach((span, index) => {
                 if(index === highlightedIndex) {
                     span.style.backgroundColor = 'rgba(126, 87, 194, 0.4)'; // Accent color with opacity
