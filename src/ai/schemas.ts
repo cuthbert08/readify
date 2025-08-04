@@ -10,7 +10,7 @@ export const GenerateSpeechInputSchema = z.object({
 });
 export type GenerateSpeechInput = z.infer<typeof GenerateSpeechInputSchema>;
 
-const sentenceSchema = z.object({
+export const sentenceSchema = z.object({
     text: z.string(),
     startTime: z.number(),
     endTime: z.number(),
@@ -18,7 +18,6 @@ const sentenceSchema = z.object({
 
 export const GenerateSpeechOutputSchema = z.object({
   audioDataUri: z.string().describe("A data URI of the generated audio file. Expected format: 'data:audio/wav;base64,<encoded_data>'."),
-  sentences: z.array(sentenceSchema).describe("An array of sentences with their start and end times in the audio."),
 });
 export type GenerateSpeechOutput = z.infer<typeof GenerateSpeechOutputSchema>;
 export type Sentence = z.infer<typeof sentenceSchema>;

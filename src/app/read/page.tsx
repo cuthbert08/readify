@@ -49,6 +49,32 @@ type ActiveDocument = {
   sentences?: Sentence[] | null;
 };
 
+const WORDS_PER_MINUTE = 150;
+
+function estimateSentences(text: string, rate: number): Sentence[] {
+    // Basic sentence splitting
+    const sentenceEndings = /(?<!\w\.\w.)(?<![A-Z][a-z]\.)(?<=\.|\?|!)\s/g;
+    const sentenceStrings = text.replace(/\s+/g, ' ').trim().split(sentenceEndings);
+    
+    let currentTime = 0;
+    const sentences: Sentence[] = [];
+
+    for (const s of sentenceStrings) {
+        if (!s) continue;
+        const sentenceText = s.trim();
+        const wordCount = sentenceText.split(/\s+/).length;
+        const duration = (wordCount / (WORDS_PER_MINUTE * rate)) * 60; // in seconds
+        
+        sentences.push({
+            text: sentenceText,
+            startTime: currentTime,
+            endTime: currentTime + duration,
+        });
+        currentTime += duration;
+    }
+    return sentences;
+}
+
 export default function ReadPage() {
     const [pdfState, setPdfState] = useState<PdfState>('idle');
     const [activeDoc, setActiveDoc] = useState<ActiveDocument | null>(null);
@@ -353,6 +379,10 @@ export default function ReadPage() {
   
       try {
         setIsGeneratingSpeech(true);
+
+        // Client-side sentence estimation
+        const sentences = estimateSentences(documentText, speakingRate);
+
         const result = await generateSpeech({ 
             text: documentText, 
             voice: selectedVoice as any,
@@ -362,12 +392,12 @@ export default function ReadPage() {
   
         if (result.audioDataUri && audioRef.current) {
           setGeneratedAudioUrl(result.audioDataUri);
-          setActiveDoc(prev => prev ? { ...prev, audioUrl: result.audioDataUri, sentences: result.sentences } : null);
+          setActiveDoc(prev => prev ? { ...prev, audioUrl: result.audioDataUri, sentences: sentences } : null);
           audioRef.current.src = result.audioDataUri;
           audioRef.current.play();
           setIsSpeaking(true);
           // Auto-save after successful generation
-          await handleSaveAfterAudio(result.audioDataUri, result.sentences);
+          await handleSaveAfterAudio(result.audioDataUri, sentences);
         } else {
           throw new Error('Audio generation failed.');
         }
