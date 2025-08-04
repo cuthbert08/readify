@@ -452,12 +452,12 @@ const ReaderView = () => {
                    </SidebarMenuItem>
                  </SidebarGroup>
                 <Separator className="my-2" />
-                <SidebarMenuItem>
+                <SidebarGroup>
                    <div className="p-2 text-sm font-semibold flex items-center gap-2 text-muted-foreground">
                     <Library />
                     My Documents
                    </div>
-                </SidebarMenuItem>
+                </SidebarGroup>
                   {userDocuments.map((doc) => (
                      <SidebarMenuItem key={doc.id}>
                         <SidebarMenuButton variant="ghost" onClick={() => handleSelectDocument(doc)} isActive={activeDoc?.id === doc.id}>
@@ -512,7 +512,7 @@ const ReaderView = () => {
                   />
                 </div>
               )}
-              <main className="flex-1 flex items-center justify-center p-4 overflow-auto bg-muted/30">
+              <main className="flex-1 flex items-center justify-center p-4 overflow-auto">
                 {renderContent()}
               </main>
               {pdfState === 'loaded' && (
