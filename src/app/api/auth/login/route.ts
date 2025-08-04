@@ -10,10 +10,13 @@ export async function POST(req: NextRequest) {
     const { email, password } = await req.json();
 
     let user: any = await kv.get(`user:${email}`);
+    let isDesignatedAdmin = email === process.env.ADMIN_EMAIL;
 
-    // If user does not exist, and they are the admin, create them.
-    if (!user && email === process.env.ADMIN_EMAIL) {
-        const hashedPassword = await bcrypt.hash(password, 10);
+    // If the user is the designated admin, ensure their record is correct
+    if (isDesignatedAdmin) {
+      const hashedPassword = await bcrypt.hash(password, 10);
+      if (!user) {
+        // Create the admin user if they don't exist
         const userId = randomUUID();
         user = {
             id: userId,
@@ -28,6 +31,18 @@ export async function POST(req: NextRequest) {
         pipeline.set(`user:${email}`, user);
         pipeline.set(`user-by-id:${userId}`, userById);
         await pipeline.exec();
+      } else if (!user.isAdmin) {
+        // If the user exists but isn't an admin, make them one.
+        user.isAdmin = true;
+        user.password = hashedPassword; // Also update password in case it changed
+        await kv.set(`user:${email}`, user);
+        const userByIdKey = `user-by-id:${user.id}`;
+        const userById: any = await kv.get(userByIdKey);
+        if (userById) {
+            userById.isAdmin = true;
+            await kv.set(userByIdKey, userById);
+        }
+      }
     }
 
     if (!user) {
@@ -40,7 +55,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ message: 'Invalid credentials' }, { status: 401 });
     }
     
-    // Explicitly check if the user's email is the admin email from env
+    // Final check for isAdmin status for the session
     const isAdmin = user.email === process.env.ADMIN_EMAIL || user.isAdmin;
 
     const expires = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
