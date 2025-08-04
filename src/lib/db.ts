@@ -31,7 +31,8 @@ export async function getUserSession() {
     const user: User | null = await kv.get(`user-by-id:${session.userId}`);
     if (user) {
         return {
-            ...session,
+            userId: session.userId,
+            isAdmin: session.isAdmin,
             name: user.name,
             email: user.email,
         };

@@ -371,9 +371,15 @@ export default function ReadPage() {
             return;
         }
         const currentTime = audioRef.current.currentTime;
-        // The sentence highlighting feature is disabled as OpenAI TTS doesn't support it.
-        // const sentence = activeDoc.sentences.find(s => currentTime >= s.startTime && currentTime < s.endTime);
-        // setCurrentSentence(sentence || null);
+        const sentence = activeDoc.sentences.find(s => currentTime >= s.startTime && currentTime < s.endTime);
+        
+        if (sentence) {
+          if (currentSentence?.text !== sentence.text) {
+             setCurrentSentence(sentence);
+          }
+        } else {
+            setCurrentSentence(null);
+        }
 
         setAudioCurrentTime(currentTime);
         if (audioDuration > 0) {
@@ -649,7 +655,7 @@ export default function ReadPage() {
                         <SidebarMenuItem>
                           <SidebarMenuButton onClick={() => router.push('/admin')}>
                             <Settings />
-                            Settings
+                            Admin Dashboard
                           </SidebarMenuButton>
                         </SidebarMenuItem>
                      )}

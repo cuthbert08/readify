@@ -31,6 +31,8 @@ const PageCanvas: React.FC<{
 }> = React.memo(({ page, scale, textItems, highlightSentence, onTextSelect }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const textLayerRef = useRef<HTMLDivElement>(null);
+  const highlightContainerRef = useRef<HTMLDivElement>(null);
+  const pageRef = useRef<HTMLDivElement>(null);
   const [isRendered, setIsRendered] = useState(false);
   const [textLayerItems, setTextLayerItems] = useState<React.ReactNode[]>([]);
 
@@ -85,6 +87,15 @@ const PageCanvas: React.FC<{
     };
   }, [page, scale]);
 
+  useEffect(() => {
+    if (highlightSentence && pageRef.current) {
+        const firstHighlight = highlightContainerRef.current?.querySelector('.highlight-box');
+        if (firstHighlight) {
+            firstHighlight.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+    }
+  }, [highlightSentence]);
+
   const handleMouseUp = () => {
     const selection = window.getSelection();
     if (!selection || selection.rangeCount === 0 || selection.isCollapsed) {
@@ -103,20 +114,93 @@ const PageCanvas: React.FC<{
   const getHighlightBoxes = (): React.ReactElement[] => {
     if (!highlightSentence || !textItems.length || !isRendered) return [];
   
-    // Highlighting based on sentence is disabled as it's not supported by the current TTS engine.
-    // This function is kept for potential future use if a different TTS engine is used.
-    return [];
+    const pageText = textItems.map(item => item.text).join('');
+    const sentenceText = highlightSentence.text.trim();
+    const startIndex = pageText.indexOf(sentenceText);
+
+    if (startIndex === -1) return [];
+
+    let charIndex = startIndex;
+    const endIndex = startIndex + sentenceText.length;
+    const boxes: React.ReactElement[] = [];
+    let currentWord = '';
+    let currentBox = { left: -1, top: -1, right: -1, bottom: -1, page: -1 };
+
+    let textItemIndex = -1;
+    let accumulatedLen = 0;
+    
+    for(let i=0; i<textItems.length; i++){
+        if(accumulatedLen + textItems[i].text.length > startIndex){
+            textItemIndex = i;
+            break;
+        }
+        accumulatedLen += textItems[i].text.length;
+    }
+    
+    if(textItemIndex === -1) return [];
+
+    let offsetInTextItem = startIndex - accumulatedLen;
+
+    for (let i = textItemIndex; i < textItems.length && charIndex < endIndex; i++) {
+        const item = textItems[i];
+        const itemText = item.text;
+
+        for (let j = offsetInTextItem; j < itemText.length && charIndex < endIndex; j++) {
+            const char = itemText[j];
+            const isWhitespace = /\s/.test(char);
+
+            if (!isWhitespace) {
+                const viewport = page.getViewport({ scale });
+                const [fontSize, , , , left, top] = item.transform;
+                const charWidth = item.width / item.text.length; 
+
+                const boxLeft = left + (j * charWidth);
+                const boxTop = viewport.height - top - item.height; 
+
+                if (currentBox.left === -1) {
+                    currentBox = { left: boxLeft, top: boxTop, right: boxLeft + charWidth, bottom: boxTop + item.height, page: item.pageNumber };
+                } else {
+                    currentBox.right = boxLeft + charWidth;
+                    currentBox.bottom = Math.max(currentBox.bottom, boxTop + item.height);
+                }
+            }
+
+            if ((isWhitespace || charIndex === endIndex -1) && currentBox.left !== -1) {
+                 boxes.push(
+                    <div
+                        key={`${charIndex}-${i}-${j}`}
+                        className="highlight-box absolute bg-primary/30 rounded-sm"
+                        style={{
+                            left: `${currentBox.left}px`,
+                            top: `${currentBox.top}px`,
+                            width: `${currentBox.right - currentBox.left}px`,
+                            height: `${currentBox.bottom - currentBox.top}px`,
+                        }}
+                    />
+                );
+                currentBox = { left: -1, top: -1, right: -1, bottom: -1, page: -1 };
+            }
+
+            charIndex++;
+        }
+        offsetInTextItem = 0; 
+    }
+
+
+    return boxes;
   };
 
   return (
-    <div className="relative mx-auto mb-4 shadow-lg" style={{ width: page.getViewport({ scale }).width, height: page.getViewport({ scale }).height }}>
+    <div ref={pageRef} className="relative mx-auto mb-4 shadow-lg" style={{ width: page.getViewport({ scale }).width, height: page.getViewport({ scale }).height }}>
         <canvas ref={canvasRef} />
         {isRendered && (
              <div ref={textLayerRef} className="absolute inset-0 textLayer" onMouseUp={handleMouseUp}>
                 {textLayerItems}
              </div>
         )}
-        {getHighlightBoxes()}
+        <div ref={highlightContainerRef} className="absolute inset-0 pointer-events-none">
+            {getHighlightBoxes()}
+        </div>
     </div>
   );
 });
@@ -158,7 +242,7 @@ const PdfViewer: React.FC<PdfViewerProps> = React.memo(({ pdfDoc, scale, allText
   }
 
   return (
-    <div className="w-full h-full p-4">
+    <div className="w-full h-full p-4 overflow-auto">
       {pages.map((page, index) => (
         <PageCanvas 
             key={`page-${page.pageNumber}`} 
