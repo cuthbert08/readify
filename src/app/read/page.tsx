@@ -322,7 +322,7 @@ export default function ReadPage() {
     const handlePreviewVoice = async (voice: string) => {
       try {
         const { audioDataUri } = await previewSpeech({ 
-          voice: voice 
+          voice: voice as any
         });
         if (audioDataUri && previewAudioRef.current) {
           previewAudioRef.current.src = audioDataUri;

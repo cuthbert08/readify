@@ -20,15 +20,22 @@ const GenerateSpeechInputSchema = z.object({
 });
 export type GenerateSpeechInput = z.infer<typeof GenerateSpeechInputSchema>;
 
+
+const PreviewSpeechInputSchema = z.object({
+    voice: validVoices.describe('The voice to use for the speech synthesis.'),
+});
+export type PreviewSpeechInput = z.infer<typeof PreviewSpeechInputSchema>;
+
+
 const GenerateSpeechOutputSchema = z.object({
   audioDataUri: z.string().describe("A data URI of the generated audio file. Expected format: 'data:audio/mp3;base64,<encoded_data>'."),
 });
 export type GenerateSpeechOutput = z.infer<typeof GenerateSpeechOutputSchema>;
 
 
-const ttsFlow = ai.defineFlow(
+export const generateSpeech = ai.defineFlow(
   {
-    name: 'ttsFlow',
+    name: 'generateSpeech',
     inputSchema: GenerateSpeechInputSchema,
     outputSchema: GenerateSpeechOutputSchema,
   },
@@ -38,8 +45,7 @@ const ttsFlow = ai.defineFlow(
       prompt: input.text,
       config: {
         voice: input.voice,
-        speed: input.speakingRate,
-        response_format: 'mp3',
+        speed: input.speakingRate || 1.0,
       },
       output: {
         format: 'url' // Get the Base64 data URI
@@ -57,15 +63,17 @@ const ttsFlow = ai.defineFlow(
 );
 
 
-export async function generateSpeech(input: GenerateSpeechInput): Promise<GenerateSpeechOutput> {
-  return ttsFlow(input);
-}
-
-export async function previewSpeech(input: Pick<GenerateSpeechInput, 'voice'>): Promise<GenerateSpeechOutput> {
-  return ttsFlow({
-    voice: input.voice,
-    text: "Hello! This is a preview of my voice.",
-    speakingRate: 1.0,
-  });
-}
-    
+export const previewSpeech = ai.defineFlow(
+    {
+        name: 'previewSpeech',
+        inputSchema: PreviewSpeechInputSchema,
+        outputSchema: GenerateSpeechOutputSchema,
+    },
+    async (input) => {
+        return generateSpeech({
+            text: "Hello! This is a preview of my voice.",
+            voice: input.voice,
+            speakingRate: 1.0
+        })
+    }
+);
