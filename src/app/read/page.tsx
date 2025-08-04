@@ -712,17 +712,9 @@ export default function ReadPage() {
                 <Separator className="my-2" />
                 <div>
                     <div className="p-2 text-sm font-semibold flex items-center gap-2 text-muted-foreground">
-                    <Library />
-                    My Documents
+                      <Library />
+                      My Documents
                     </div>
-                     {isAdmin && (
-                        <SidebarMenuItem>
-                          <SidebarMenuButton onClick={() => router.push('/admin')}>
-                            <Settings />
-                            Admin Dashboard
-                          </SidebarMenuButton>
-                        </SidebarMenuItem>
-                     )}
                 </div>
                  {activeDoc && !activeDoc.id && (
                   <SidebarMenuItem>
@@ -783,6 +775,19 @@ export default function ReadPage() {
               </SidebarMenu>
             </SidebarContent>
             <SidebarFooter>
+               {isAdmin && (
+                  <>
+                    <SidebarMenu>
+                      <SidebarMenuItem>
+                          <SidebarMenuButton onClick={() => router.push('/admin')}>
+                            <Settings />
+                            Admin Dashboard
+                          </SidebarMenuButton>
+                      </SidebarMenuItem>
+                    </SidebarMenu>
+                    <Separator />
+                  </>
+                )}
               <div className="flex items-center gap-3 p-2">
                 <Avatar>
                   <AvatarImage data-ai-hint="user avatar" src="https://placehold.co/40x40.png" />
