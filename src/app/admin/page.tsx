@@ -11,27 +11,8 @@ import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
 import { getAllUsers, getAllDocuments, deleteUser } from '@/lib/admin-actions';
 import type { User, Document } from '@/lib/admin-actions';
-import {
-  ChartConfig,
-  ChartContainer,
-  ChartTooltip,
-  ChartTooltipContent,
-} from "@/components/ui/chart"
-import { BarChart as RechartsBarChart, Bar, XAxis, YAxis, CartesianGrid } from 'recharts';
-import { format, subDays, parseISO } from 'date-fns';
 import AddUserDialog from '@/components/add-user-dialog';
 
-
-const chartConfig = {
-  users: {
-    label: "Users",
-    color: "hsl(var(--chart-1))",
-  },
-  documents: {
-    label: "Documents",
-    color: "hsl(var(--chart-2))",
-  },
-} satisfies ChartConfig
 
 export default function AdminPage() {
   const router = useRouter();
@@ -93,19 +74,6 @@ export default function AdminPage() {
   const totalUsers = users.length;
   const totalDocuments = documents.length;
 
-  const last7Days = Array.from({ length: 7 }, (_, i) => subDays(new Date(), i)).reverse();
-  
-  const signupData = last7Days.map(day => ({
-      date: format(day, 'MMM d'),
-      users: users.filter(u => format(parseISO(u.createdAt), 'yyyy-MM-dd') === format(day, 'yyyy-MM-dd')).length
-  }));
-
-  const uploadData = last7Days.map(day => ({
-      date: format(day, 'MMM d'),
-      documents: documents.filter(d => format(parseISO(d.createdAt), 'yyyy-MM-dd') === format(day, 'yyyy-MM-dd')).length
-  }));
-
-
   return (
     <>
     <div className="flex min-h-screen w-full flex-col bg-muted/40">
@@ -148,40 +116,6 @@ export default function AdminPage() {
                   <div className="text-2xl font-bold">{totalDocuments}</div>
                 </CardContent>
               </Card>
-            </div>
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-2 mt-4">
-                 <Card>
-                    <CardHeader>
-                        <CardTitle>New Users (Last 7 Days)</CardTitle>
-                    </CardHeader>
-                    <CardContent className="h-[300px]">
-                        <ChartContainer config={chartConfig}>
-                            <RechartsBarChart data={signupData} accessibilityLayer>
-                                <CartesianGrid vertical={false} />
-                                <XAxis dataKey="date" tickLine={false} tickMargin={10} axisLine={false} />
-                                <YAxis />
-                                <ChartTooltip content={<ChartTooltipContent />} />
-                                <Bar dataKey="users" fill="var(--color-users)" radius={4} />
-                            </RechartsBarChart>
-                        </ChartContainer>
-                    </CardContent>
-                 </Card>
-                 <Card>
-                    <CardHeader>
-                        <CardTitle>Documents Uploaded (Last 7 Days)</CardTitle>
-                    </CardHeader>
-                    <CardContent className="h-[300px]">
-                       <ChartContainer config={chartConfig}>
-                            <RechartsBarChart data={uploadData} accessibilityLayer>
-                                <CartesianGrid vertical={false} />
-                                <XAxis dataKey="date" tickLine={false} tickMargin={10} axisLine={false} />
-                                <YAxis />
-                                <ChartTooltip content={<ChartTooltipContent />} />
-                                <Bar dataKey="documents" fill="var(--color-documents)" radius={4} />
-                            </RechartsBarChart>
-                        </ChartContainer>
-                    </CardContent>
-                 </Card>
             </div>
           </TabsContent>
 
