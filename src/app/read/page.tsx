@@ -18,9 +18,7 @@ import { getDocuments, saveDocument, Document } from '@/lib/db';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { getSession } from '@/lib/session';
 
-if (typeof window !== 'undefined') {
-  pdfjsLib.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.mjs`;
-}
+pdfjsLib.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.mjs`;
 
 type PdfState = 'idle' | 'loading' | 'loaded' | 'error';
 type ActiveDocument = {
