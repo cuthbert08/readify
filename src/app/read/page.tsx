@@ -30,7 +30,7 @@ import { Volume2 } from 'lucide-react';
 import { useMediaQuery } from '@/hooks/use-media-query';
 
 
-pdfjsLib.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.mjs`;
+pdfjsLib.GlobalWorkerOptions.workerSrc = '/pdf.worker.mjs';
 
 type PdfState = 'idle' | 'loading' | 'loaded' | 'error';
 type ActiveDocument = {
@@ -233,68 +233,68 @@ export default function ReadPage() {
     }
   
     const handleSave = async () => {
-      if (!activeDoc) return;
+        if (!activeDoc) return;
     
-      // A document must either have a file (for new uploads) or an ID (for existing docs)
-      if (!activeDoc.file && !activeDoc.id) {
-        toast({ variant: "destructive", title: "Save Error", description: "No document data to save." });
-        return;
-      }
+        // A document must either have a file (for new uploads) or an ID (for existing docs)
+        if (!activeDoc.file && !activeDoc.id) {
+          toast({ variant: "destructive", title: "Save Error", description: "No document data to save." });
+          return;
+        }
     
-      setIsSaving(true);
-      try {
-        let pdfUrl = activeDoc.url;
+        setIsSaving(true);
+        try {
+          let pdfUrl = activeDoc.url;
     
-        // Only upload if there's a new file.
-        if (activeDoc.file) {
-          const uploadResponse = await fetch('/api/upload', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/pdf', 'x-vercel-filename': activeDoc.file.name },
-            body: activeDoc.file,
-          });
+          // Only upload if there's a new file.
+          if (activeDoc.file) {
+            const uploadResponse = await fetch('/api/upload', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/pdf', 'x-vercel-filename': activeDoc.file.name },
+              body: activeDoc.file,
+            });
     
-          if (!uploadResponse.ok) {
-            const errorData = await uploadResponse.json();
-            throw new Error(errorData.message || 'PDF Upload failed');
+            if (!uploadResponse.ok) {
+              const errorData = await uploadResponse.json();
+              throw new Error(errorData.message || 'PDF Upload failed');
+            }
+            const blob = await uploadResponse.json();
+            pdfUrl = blob.url;
           }
-          const blob = await uploadResponse.json();
-          pdfUrl = blob.url;
-        }
         
-        if (!pdfUrl) {
-          throw new Error("Could not determine PDF URL for saving.");
-        }
+          if (!pdfUrl) {
+            throw new Error("Could not determine PDF URL for saving.");
+          }
     
-        const docToSave = {
-          id: activeDoc.id || undefined, // Pass id only if it exists
-          fileName: fileName,
-          pdfUrl: pdfUrl,
-          currentPage: currentPage,
-          totalPages: totalPages,
-          zoomLevel: zoomLevel,
-          audioUrl: generatedAudioUrl,
-        };
+          const docToSave = {
+            id: activeDoc.id || undefined, // Pass id only if it exists
+            fileName: fileName,
+            pdfUrl: pdfUrl,
+            currentPage: currentPage,
+            totalPages: totalPages,
+            zoomLevel: zoomLevel,
+            audioUrl: generatedAudioUrl,
+          };
     
-        const savedDoc = await saveDocument(docToSave);
+          const savedDoc = await saveDocument(docToSave);
     
-        // Update the active document state to reflect the saved state
-        setActiveDoc(prev => prev ? { ...prev, id: savedDoc.id, file: null, url: savedDoc.pdfUrl, audioUrl: savedDoc.audioUrl } : null);
+          // Update the active document state to reflect the saved state
+          setActiveDoc(prev => prev ? { ...prev, id: savedDoc.id, file: null, url: savedDoc.pdfUrl, audioUrl: savedDoc.audioUrl } : null);
         
-        // Refresh the user's document list in the sidebar
-        await fetchUserDocuments(); 
+          // Refresh the user's document list in the sidebar
+          await fetchUserDocuments(); 
     
-        toast({ title: "Success", description: "Document saved successfully." });
-      } catch (error) {
-        console.error('Save error:', error);
-        toast({ 
-          variant: "destructive", 
-          title: "Save Error", 
-          description: error instanceof Error ? error.message : "Could not save your document." 
-        });
-      } finally {
-        setIsSaving(false);
-      }
-    };
+          toast({ title: "Success", description: "Document saved successfully." });
+        } catch (error) {
+          console.error('Save error:', error);
+          toast({ 
+            variant: "destructive", 
+            title: "Save Error", 
+            description: error instanceof Error ? error.message : "Could not save your document." 
+          });
+        } finally {
+          setIsSaving(false);
+        }
+      };
   
     const handlePlayPause = async () => {
       if (isSpeaking) {
