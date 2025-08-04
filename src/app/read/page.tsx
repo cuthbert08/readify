@@ -37,7 +37,6 @@ import TextSelectionMenu from '@/components/text-selection-menu';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Textarea } from '@/components/ui/textarea';
 import { Card } from '@/components/ui/card';
-import { generateSpeechWithTimings } from '@/ai/flows/generate-speech-with-timings';
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
   'pdfjs-dist/build/pdf.worker.min.mjs',
@@ -506,11 +505,12 @@ export default function ReadPage() {
         setIsSynthesizing(true);
         setSynthesisAudioUrl(null);
         try {
-            const result = await generateSpeechWithTimings({
+            const flow = generateSpeechWithTimingsFlow({
                 text: synthesisText,
                 voice: synthesisVoice as any,
                 speakingRate: synthesisRate
             });
+            const result = await flow.result();
             if (result.audioDataUri) {
                 setSynthesisAudioUrl(result.audioDataUri);
             }
