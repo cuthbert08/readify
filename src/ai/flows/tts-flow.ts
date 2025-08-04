@@ -36,10 +36,20 @@ export const generateSpeech = ai.defineFlow(
     
     // Step 1: Use Google AI to clean text and get sentence timings
     const analysisPrompt = `Analyze the following document text.
-    1. Clean the text by removing any repetitive headers, footers, page numbers, and other non-content text. Return only the main body of the text in the 'cleanedText' field.
-    2. Break the cleaned text down into individual sentences.
-    3. For each sentence, provide the text and an *estimated* start and end time in seconds, assuming a normal speaking pace of ${input.speakingRate || 1.0}.
+    Your task is to act as a text processing engine. You must perform two steps and return a single JSON object matching the requested schema.
     
+    1.  **Clean the Text**: Read the entire text and remove any repetitive content that appears to be a header, footer, or page number. Return only the main body of the text in the 'cleanedText' field.
+    
+    2.  **Generate Sentence Timings**:
+        *   Break the cleaned text down into an ordered list of individual sentences.
+        *   For each sentence, you must calculate an *estimated* start and end time in seconds.
+        *   Assume a normal speaking pace of 150 words per minute, which is equivalent to a speaking rate of ${input.speakingRate || 1.0}.
+        *   Calculate the duration of each sentence based on its word count. The time for each word is approximately (60 seconds / 150 words) / speakingRate.
+        *   The 'startTime' of a sentence is the 'endTime' of the previous sentence. The 'endTime' is the 'startTime' plus the calculated duration.
+        *   The first sentence should have a 'startTime' of 0.
+
+    Return a valid JSON object containing both the 'cleanedText' and the 'sentences' array.
+
     TEXT:
     ---
     ${input.text}
@@ -50,10 +60,14 @@ export const generateSpeech = ai.defineFlow(
         prompt: analysisPrompt,
         model: 'googleai/gemini-1.5-flash-latest',
         output: { schema: TextAnalysisOutputSchema },
+        config: {
+            responseMimeType: 'application/json',
+        }
     });
     
     if (!analysisOutput?.cleanedText || !analysisOutput?.sentences) {
-        throw new Error('Google AI text analysis failed to return cleaned text or sentences.');
+        console.error("Google AI analysis failed. Raw output:", JSON.stringify(analysisOutput, null, 2));
+        throw new Error('Google AI text analysis failed to return cleaned text or sentences. The model may not have returned the data in the expected format.');
     }
 
     const { cleanedText, sentences } = analysisOutput;
