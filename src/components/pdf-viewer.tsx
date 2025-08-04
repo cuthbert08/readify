@@ -2,7 +2,8 @@
 
 import React, { useRef, useEffect, useState, useMemo } from 'react';
 import type { PDFDocumentProxy, PDFPageProxy } from 'pdfjs-dist/types/src/display/api';
-import type { TextItem as PdfTextItem } from 'pdfjs-dist/types/src/display/api';
+import type { TextItem as PdfTextItem, TextContent } from 'pdfjs-dist/types/src/display/api';
+import * as pdfjsLib from 'pdfjs-dist';
 import { Skeleton } from './ui/skeleton';
 import { cn } from '@/lib/utils';
 import type { Sentence } from '@/ai/schemas';
@@ -51,7 +52,20 @@ const PageCanvas: React.FC<{
     };
 
     let renderTask = page.render(renderContext);
-    renderTask.promise.then(() => setIsRendered(true));
+    renderTask.promise.then(async () => {
+        setIsRendered(true);
+        // Render text layer
+        if (textLayerRef.current) {
+            const textContent = await page.getTextContent();
+            textLayerRef.current.innerHTML = ''; // Clear previous text layer
+            pdfjsLib.renderTextLayer({
+                textContentSource: textContent,
+                container: textLayerRef.current,
+                viewport: viewport,
+                textDivs: []
+            });
+        }
+    });
 
     return () => {
       renderTask.cancel();
@@ -71,65 +85,36 @@ const PageCanvas: React.FC<{
     }
   }
 
-  // Create a map of text content to its item for easy lookup
-  const textToItemMap = useMemo(() => {
-    const map = new Map<string, TextItem[]>();
-    textItems.forEach(item => {
-        const text = item.text.trim();
-        if (!map.has(text)) {
-            map.set(text, []);
-        }
-        map.get(text)?.push(item);
-    });
-    return map;
-  }, [textItems]);
-  
   const getHighlightBoxes = (): React.CSSProperties[] => {
-    if (!highlightSentence || !isRendered) return [];
+    if (!highlightSentence || !textItems.length || !isRendered) return [];
   
     const sentenceText = highlightSentence.text.trim();
-    const viewport = page.getViewport({ scale });
-    let boxes: React.CSSProperties[] = [];
   
     // This is a simplified approach. A real implementation would need to handle
     // sentences spanning multiple text items and partial matches.
-    const sentenceWords = sentenceText.split(/\s+/);
-    let currentWordIndex = 0;
-
-    for (const item of textItems) {
-        if (sentenceText.includes(item.text.trim())) {
-             const [fontHeight, , , , , fontY, fontX] = item.transform;
-             const left = fontX;
-             const top = fontY - fontHeight;
-             const width = item.width;
-             const height = item.height;
-
-             boxes.push({
-                 left: `${left * scale}px`,
-                 top: `${top * scale}px`,
-                 width: `${width * scale}px`,
-                 height: `${height * scale}px`,
-                 position: 'absolute',
-                 backgroundColor: 'rgba(255, 255, 0, 0.4)',
-                 zIndex: 2,
-                 pointerEvents: 'none',
-             });
-        }
-    }
-
-    // A more complex approach to finding all items in a sentence
     const itemsInSentence: TextItem[] = [];
     let remainingSentence = sentenceText;
-    textItems.forEach(item => {
-        if(remainingSentence.startsWith(item.text.trim())) {
-            itemsInSentence.push(item);
-            remainingSentence = remainingSentence.substring(item.text.trim().length).trim();
-        }
-    })
+    
+    const fullText = allTextItems.map(i => i.text).join('');
+    const startIndex = fullText.indexOf(sentenceText);
 
-    if (itemsInSentence.length > 0) {
-       const firstItem = itemsInSentence[0];
-       const lastItem = itemsInSentence[itemsInSentence.length - 1];
+    if (startIndex === -1) return [];
+
+    let charCount = 0;
+    let sentenceItems: TextItem[] = [];
+    for(const item of allTextItems) {
+        if(charCount + item.text.length > startIndex && charCount < startIndex + sentenceText.length) {
+            if (item.pageNumber === page.pageNumber) {
+                sentenceItems.push(item);
+            }
+        }
+        charCount += item.text.length;
+    }
+
+
+    if (sentenceItems.length > 0) {
+       const firstItem = sentenceItems[0];
+       const lastItem = sentenceItems[sentenceItems.length - 1];
        
        const startX = firstItem.transform[4];
        const startY = firstItem.transform[5] - firstItem.height;
@@ -145,6 +130,7 @@ const PageCanvas: React.FC<{
            backgroundColor: 'rgba(255, 255, 0, 0.4)',
            zIndex: 2,
            pointerEvents: 'none',
+           borderRadius: '2px',
        }]
 
     }
@@ -156,21 +142,8 @@ const PageCanvas: React.FC<{
     <div className="relative mx-auto mb-4 shadow-lg" style={{ width: page.getViewport({ scale }).width, height: page.getViewport({ scale }).height }}>
         <canvas ref={canvasRef} />
         {isRendered && (
-             <div ref={textLayerRef} className="absolute inset-0" onMouseUp={handleMouseUp} style={{'--scale-factor': scale} as any}>
-                {textItems.map((item, index) => {
-                    const viewport = page.getViewport({ scale: 1 });
-                    const transform = pdfjsLib.Util.transform(viewport.transform, item.transform);
-                    const style = pdfjsLib.Util.getStyle(transform, { // Using getStyle to calculate CSS
-                        fontSize: `${transform.fontSize}px`,
-                        fontFamily: 'sans-serif', // Fallback font
-                    });
-                    
-                    return (
-                        <span key={index} style={{...style, writingMode: 'horizontal-tb', whiteSpace: 'pre'}}>
-                            {item.text}
-                        </span>
-                    );
-                })}
+             <div ref={textLayerRef} className="absolute inset-0 textLayer" onMouseUp={handleMouseUp}>
+                {/* Text layer content is now rendered by pdfjsLib.renderTextLayer */}
              </div>
         )}
         {getHighlightBoxes().map((style, i) => <div key={i} style={style} />)}
