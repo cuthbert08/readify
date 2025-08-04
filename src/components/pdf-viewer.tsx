@@ -1,97 +1,81 @@
 'use client';
 
-import React, { useRef, useEffect } from 'react';
-import type { PDFDocumentProxy, TextContent, PageViewport, RenderTask } from 'pdfjs-dist/types/src/display/api';
-import { TextLayer } from 'pdfjs-dist/build/pdf';
+import React, { useRef, useEffect, useState } from 'react';
+import type { PDFDocumentProxy, PDFPageProxy } from 'pdfjs-dist/types/src/display/api';
+import { Skeleton } from './ui/skeleton';
 
 type PdfViewerProps = {
   pdfDoc: PDFDocumentProxy | null;
-  pageNumber: number;
-  textContent: TextContent | null;
-  viewport: PageViewport | null;
+  scale: number;
 };
 
-const PdfViewer: React.FC<PdfViewerProps> = ({ pdfDoc, pageNumber, textContent, viewport }) => {
+const PageCanvas: React.FC<{ page: PDFPageProxy; scale: number; }> = ({ page, scale }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const textLayerRef = useRef<HTMLDivElement>(null);
-  const renderTaskRef = useRef<RenderTask | null>(null);
 
   useEffect(() => {
-    if (!pdfDoc || !canvasRef.current || !textLayerRef.current || !viewport) return;
-
-    if (renderTaskRef.current) {
-      renderTaskRef.current.cancel();
-      renderTaskRef.current = null;
-    }
-
     const canvas = canvasRef.current;
-    const textLayerDiv = textLayerRef.current;
-    const context = canvas.getContext('2d');
+    if (!canvas) return;
 
+    const viewport = page.getViewport({ scale });
+    const context = canvas.getContext('2d');
     if (!context) return;
-    
+
     canvas.height = viewport.height;
     canvas.width = viewport.width;
+    canvas.style.width = `${viewport.width}px`;
+    canvas.style.height = `${viewport.height}px`;
 
-    textLayerDiv.innerHTML = '';
-    textLayerDiv.style.width = `${viewport.width}px`;
-    textLayerDiv.style.height = `${viewport.height}px`;
-
-    const renderPage = async () => {
-      try {
-        const page = await pdfDoc.getPage(pageNumber);
-        
-        // Ensure rendering is not cancelled before starting.
-        if (renderTaskRef.current) {
-          return;
-        }
-
-        const renderContext = {
-          canvasContext: context,
-          viewport: viewport,
-        };
-        const renderTask = page.render(renderContext);
-        renderTaskRef.current = renderTask;
-        
-        await renderTask.promise;
-
-        if (textContent) {
-            const textLayer = new TextLayer({
-                textContentSource: textContent,
-                container: textLayerDiv,
-                viewport: viewport,
-            });
-            textLayer.render();
-        }
-      } catch (error: any) {
-        if (error.name !== 'RenderingCancelledException') {
-          console.error('Error rendering page:', error);
-        }
-      } finally {
-        if (renderTaskRef.current) {
-            renderTaskRef.current = null;
-        }
-      }
+    const renderContext = {
+      canvasContext: context,
+      viewport: viewport,
     };
 
-    renderPage();
+    let renderTask = page.render(renderContext);
 
     return () => {
-      if (renderTaskRef.current) {
-        renderTaskRef.current.cancel();
-        renderTaskRef.current = null;
+      renderTask.cancel();
+    };
+  }, [page, scale]);
+
+  return <canvas ref={canvasRef} className="mx-auto mb-4 shadow-lg" />;
+};
+
+
+const PdfViewer: React.FC<PdfViewerProps> = ({ pdfDoc, scale }) => {
+  const [pages, setPages] = useState<PDFPageProxy[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (!pdfDoc) return;
+
+    const fetchPages = async () => {
+      setLoading(true);
+      const allPages: PDFPageProxy[] = [];
+      for (let i = 1; i <= pdfDoc.numPages; i++) {
+        const page = await pdfDoc.getPage(i);
+        allPages.push(page);
       }
+      setPages(allPages);
+      setLoading(false);
     };
 
-  }, [pdfDoc, pageNumber, textContent, viewport]);
-  
+    fetchPages();
+  }, [pdfDoc]);
+
+  if (loading) {
+    return (
+        <div className="space-y-4">
+            <Skeleton className="h-[700px] w-[500px] rounded-md" />
+            <Skeleton className="h-[700px] w-[500px] rounded-md" />
+        </div>
+    );
+  }
+
   return (
-    <div className="relative mx-auto shadow-lg" style={{ width: viewport?.width, height: viewport?.height }}>
-      <canvas ref={canvasRef} className="w-full h-full" />
-      <div 
-        ref={textLayerRef}
-        className="textLayer absolute top-0 left-0 w-full h-full"
-      />
+    <div className="w-full h-full">
+      {pages.map((page, index) => (
+        <PageCanvas key={`page-${index + 1}`} page={page} scale={scale} />
+      ))}
     </div>
   );
 };

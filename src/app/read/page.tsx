@@ -2,17 +2,18 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import * as pdfjsLib from 'pdfjs-dist';
-import type { PDFDocumentProxy, TextContent, PageViewport, RenderTask } from 'pdfjs-dist/types/src/display/api';
+import type { PDFDocumentProxy, PDFPageProxy, TextContent } from 'pdfjs-dist/types/src/display/api';
 import { UploadCloud, FileText, Loader2, LogOut, Save, Library, Download } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import PdfViewer from '@/components/pdf-viewer';
 import AudioPlayer from '@/components/audio-player';
+import PdfToolbar from '@/components/pdf-toolbar';
 import { useToast } from "@/hooks/use-toast";
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { getAvailableVoices, AvailableVoicesOutput } from '@/ai/flows/voice-selection';
 import { generateSpeech, previewSpeech } from '@/ai/flows/tts-flow';
-import { Sidebar, SidebarProvider, SidebarTrigger, SidebarContent, SidebarHeader, SidebarMenu, SidebarMenuItem, SidebarMenuButton, SidebarFooter } from '@/components/ui/sidebar';
+import { Sidebar, SidebarProvider, SidebarTrigger, SidebarContent, SidebarHeader, SidebarMenu, SidebarMenuItem, SidebarMenuButton, SidebarFooter, SidebarRail } from '@/components/ui/sidebar';
 import { getDocuments, saveDocument, Document } from '@/lib/db';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { getSession } from '@/lib/session';
@@ -38,10 +39,10 @@ export default function ReadPage() {
   const [totalPages, setTotalPages] = useState(0);
   const [currentPage, setCurrentPage] = useState(1);
   const [loadingProgress, setLoadingProgress] = useState(0);
+  const [zoomLevel, setZoomLevel] = useState(1);
+  const [isFullScreen, setIsFullScreen] = useState(false);
 
-  const [textContent, setTextContent] = useState<TextContent | null>(null);
-  const [pageText, setPageText] = useState('');
-  const [viewport, setViewport] = useState<PageViewport | null>(null);
+  const [documentText, setDocumentText] = useState('');
 
   const [isSaving, setIsSaving] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
@@ -57,6 +58,7 @@ export default function ReadPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const previewAudioRef = useRef<HTMLAudioElement | null>(null);
+  const viewerRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
 
   const fetchUserDocuments = useCallback(async () => {
@@ -79,6 +81,10 @@ export default function ReadPage() {
       try {
         const voices = await getAvailableVoices();
         setAvailableVoices(voices);
+        // Also set initial audio URL if doc has one
+        if (activeDoc?.audioUrl) {
+            setGeneratedAudioUrl(activeDoc.audioUrl);
+        }
       } catch (error) {
         toast({
           variant: "destructive",
@@ -88,59 +94,52 @@ export default function ReadPage() {
       }
     }
     fetchVoices();
-  }, [toast, fetchUserDocuments]);
+  }, [toast, fetchUserDocuments, activeDoc]);
 
   const handleLogout = async () => {
     await fetch('/api/auth/logout', { method: 'POST' });
     router.push('/');
   };
 
-  const loadPage = useCallback(async (pageNumber: number, doc: PDFDocumentProxy) => {
-    try {
-      const page = await doc.getPage(pageNumber);
-      const viewport = page.getViewport({ scale: 2 });
-      setViewport(viewport);
-
-      const content = await page.getTextContent();
-      setTextContent(content);
-      const currentText = content.items.map(item => (item as any).str).join(' ');
-      setPageText(currentText);
-      setGeneratedAudioUrl(null); // Reset audio when page changes
-
-    } catch (error) {
-      console.error('Failed to load page:', error);
-      toast({
-        variant: "destructive",
-        title: "Error",
-        description: `Failed to load page ${pageNumber}.`,
-      });
-    }
-  }, [toast]);
-
-  const loadPdf = useCallback(async (source: File | string, docId: string | null = null, initialPage: number = 1) => {
+  const loadPdf = useCallback(async (source: File | string, docId: string | null = null, audioUrl: string | null = null) => {
     setPdfState('loading');
     setLoadingProgress(0);
     setActiveDoc(null);
+    setDocumentText('');
+    setGeneratedAudioUrl(null);
+    setTotalPages(0);
     setCurrentPage(1);
 
     try {
-      const loadingTask = pdfjsLib.getDocument(typeof source === 'string' ? source : URL.createObjectURL(source));
+      const loadingTask = pdfjsLib.getDocument(typeof source === 'string' ? { url: source } : { data: await source.arrayBuffer() });
       loadingTask.onProgress = ({ loaded, total }) => {
         if (total) setLoadingProgress((loaded / total) * 100);
       };
       const pdf = await loadingTask.promise;
+      setTotalPages(pdf.numPages);
       
+      const allText: string[] = [];
+      for(let i = 1; i <= pdf.numPages; i++) {
+        const page = await pdf.getPage(i);
+        const content = await page.getTextContent();
+        const pageText = content.items.map(item => (item as any).str).join(' ');
+        allText.push(pageText);
+      }
+      setDocumentText(allText.join('\n\n'));
+
       setActiveDoc({
         id: docId,
         file: typeof source === 'string' ? null : source,
         doc: pdf,
         url: typeof source === 'string' ? source : null,
+        audioUrl: audioUrl,
       });
 
-      setTotalPages(pdf.numPages);
-      setCurrentPage(initialPage);
+      if(audioUrl) {
+        setGeneratedAudioUrl(audioUrl);
+      }
+      
       setPdfState('loaded');
-      await loadPage(initialPage, pdf);
       
       if(typeof source !== 'string') {
         setFileName(source.name);
@@ -155,7 +154,7 @@ export default function ReadPage() {
         description: "Could not read the selected PDF file.",
       });
     }
-  }, [toast, loadPage]);
+  }, [toast]);
 
 
   const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -169,31 +168,43 @@ export default function ReadPage() {
   
   const handleSelectDocument = async (doc: Document) => {
     setFileName(doc.fileName);
-    await loadPdf(doc.pdfUrl, doc.id, doc.currentPage);
+    setZoomLevel(doc.zoomLevel || 1);
+    await loadPdf(doc.pdfUrl, doc.id, doc.audioUrl);
   }
 
   const handleSave = async () => {
-    if (!activeDoc?.file) return;
+    if (!activeDoc || (!activeDoc.file && !activeDoc.id)) return;
     setIsSaving(true);
     try {
-      const response = await fetch('/api/upload', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/pdf', 'x-vercel-filename': activeDoc.file.name },
-        body: activeDoc.file,
-      });
+      let pdfUrl = activeDoc.url;
 
-      if (!response.ok) throw new Error('Upload failed');
+      if(activeDoc.file) {
+        const uploadResponse = await fetch('/api/upload', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/pdf', 'x-vercel-filename': activeDoc.file.name },
+          body: activeDoc.file,
+        });
+
+        if (!uploadResponse.ok) throw new Error('PDF Upload failed');
+        const blob = await uploadResponse.json();
+        pdfUrl = blob.url;
+      }
       
-      const { url: pdfUrl } = await response.json();
-      
-      const newDoc = await saveDocument({
-        fileName: activeDoc.file.name,
+      if (!pdfUrl) throw new Error("Could not get PDF URL");
+
+      const newDocData: any = {
+        fileName: fileName,
         pdfUrl: pdfUrl,
         currentPage: currentPage,
         totalPages: totalPages,
-      });
+        zoomLevel: zoomLevel
+      };
+      if (activeDoc.id) newDocData.id = activeDoc.id;
+      if (generatedAudioUrl) newDocData.audioUrl = generatedAudioUrl;
 
-      setActiveDoc(prev => prev ? { ...prev, id: newDoc.id, file: null, url: newDoc.pdfUrl } : null);
+      const newDoc = await saveDocument(newDocData);
+
+      setActiveDoc(prev => prev ? { ...prev, id: newDoc.id, file: null, url: newDoc.pdfUrl, audioUrl: newDoc.audioUrl } : null);
       await fetchUserDocuments();
 
       toast({ title: "Success", description: "Document saved successfully." });
@@ -214,21 +225,25 @@ export default function ReadPage() {
 
     if (isGeneratingSpeech) return;
 
-    if (audioRef.current?.src && !audioRef.current.ended) {
-      audioRef.current.play();
-      setIsSpeaking(true);
-      return;
+    if (generatedAudioUrl && audioRef.current) {
+        if(audioRef.current.src !== generatedAudioUrl) {
+            audioRef.current.src = generatedAudioUrl;
+        }
+        audioRef.current.play();
+        setIsSpeaking(true);
+        return;
     }
 
-    if (!pageText) return;
+    if (!documentText) return;
 
     try {
       setIsGeneratingSpeech(true);
-      const { audioDataUri } = await generateSpeech({ text: pageText, voice: selectedVoice });
+      const { audioDataUri } = await generateSpeech({ text: documentText, voice: selectedVoice });
       setIsGeneratingSpeech(false);
 
       if (audioDataUri && audioRef.current) {
         setGeneratedAudioUrl(audioDataUri);
+        setActiveDoc(prev => prev ? { ...prev, audioUrl: audioDataUri } : null);
         audioRef.current.src = audioDataUri;
         audioRef.current.play();
         setIsSpeaking(true);
@@ -258,21 +273,25 @@ export default function ReadPage() {
     }
   }
 
-  const changePage = (offset: number) => {
-    if (!activeDoc?.doc) return;
-    const newPage = currentPage + offset;
-    if (newPage > 0 && newPage <= totalPages) {
-      if (audioRef.current) {
-        audioRef.current.pause();
-        audioRef.current.src = '';
-      }
-      setIsSpeaking(false);
-      setGeneratedAudioUrl(null);
-      setCurrentPage(newPage);
-      loadPage(newPage, activeDoc.doc);
+  const toggleFullScreen = () => {
+    if (!viewerRef.current) return;
+    if (!document.fullscreenElement) {
+      viewerRef.current.requestFullscreen();
+      setIsFullScreen(true);
+    } else {
+      document.exitFullscreen();
+      setIsFullScreen(false);
     }
   };
-  
+
+  useEffect(() => {
+    const handleFullscreenChange = () => {
+      setIsFullScreen(!!document.fullscreenElement);
+    };
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
+    return () => document.removeEventListener('fullscreenchange', handleFullscreenChange);
+  }, []);
+
   useEffect(() => {
     if (activeDoc?.id && !isSaving) {
       const timer = setTimeout(() => {
@@ -281,13 +300,14 @@ export default function ReadPage() {
           fileName: fileName,
           pdfUrl: activeDoc.url || '',
           currentPage: currentPage,
-          totalPages: totalPages
+          totalPages: totalPages,
+          zoomLevel: zoomLevel,
+          audioUrl: activeDoc.audioUrl,
         }).catch(err => console.error("Failed to auto-save progress", err));
-      }, 2000); // Debounce auto-save
+      }, 2000); 
       return () => clearTimeout(timer);
     }
-  }, [currentPage, activeDoc, fileName, totalPages, isSaving]);
-
+  }, [currentPage, activeDoc, fileName, totalPages, isSaving, zoomLevel]);
 
   const renderContent = () => {
     switch (pdfState) {
@@ -301,11 +321,7 @@ export default function ReadPage() {
         );
       case 'loaded':
         return (
-          <div className="flex-1 flex flex-col items-center w-full overflow-hidden">
-            <div className="flex-1 overflow-auto w-full p-4 md:p-8">
-              <PdfViewer pdfDoc={activeDoc?.doc || null} pageNumber={currentPage} textContent={textContent} viewport={viewport} />
-            </div>
-          </div>
+           <PdfViewer pdfDoc={activeDoc?.doc || null} scale={zoomLevel} />
         );
       case 'error':
         return (
@@ -329,11 +345,14 @@ export default function ReadPage() {
 
   return (
     <SidebarProvider>
-      <div className="flex flex-col h-screen bg-background">
+      <div className="flex h-screen bg-background">
         <input type="file" ref={fileInputRef} onChange={handleFileChange} accept="application/pdf" className="hidden" />
         <Sidebar>
           <SidebarHeader>
-             <h1 className="text-2xl font-headline text-primary">Readify</h1>
+             <div className="flex items-center justify-between">
+                <h1 className="text-2xl font-headline text-primary">Readify</h1>
+                <SidebarTrigger />
+             </div>
           </SidebarHeader>
           <SidebarContent>
             <SidebarMenu>
@@ -355,7 +374,7 @@ export default function ReadPage() {
                         <FileText />
                         <div className="flex flex-col items-start">
                            <span className="truncate max-w-[150px]">{doc.fileName}</span>
-                           <span className="text-xs text-muted-foreground">Page {doc.currentPage} of {doc.totalPages}</span>
+                           <span className="text-xs text-muted-foreground">{doc.totalPages} pages</span>
                         </div>
                       </SidebarMenuButton>
                    </SidebarMenuItem>
@@ -378,22 +397,32 @@ export default function ReadPage() {
             </div>
           </SidebarFooter>
         </Sidebar>
+        <SidebarRail />
 
-        <div className="flex-1 flex flex-col">
-            <header className="flex items-center justify-between p-4 border-b bg-card">
+        <div className="flex-1 flex flex-col" ref={viewerRef}>
+            <header className="flex items-center justify-between p-2 border-b bg-card print:hidden">
               <div className="flex items-center gap-2">
                 <SidebarTrigger className="md:hidden" />
                 <h2 className="text-lg font-semibold truncate max-w-xs md:max-w-md">{fileName || 'Readify'}</h2>
               </div>
-              <div className="flex items-center gap-4">
-                {pdfState === 'loaded' && activeDoc?.file && (
+              <div className="flex items-center gap-2">
+                {pdfState === 'loaded' && (
+                    <PdfToolbar
+                        zoomLevel={zoomLevel}
+                        onZoomIn={() => setZoomLevel(z => Math.min(z + 0.2, 3))}
+                        onZoomOut={() => setZoomLevel(z => Math.max(z - 0.2, 0.4))}
+                        onFullScreen={toggleFullScreen}
+                        isFullScreen={isFullScreen}
+                    />
+                )}
+                {pdfState === 'loaded' && (activeDoc?.file || (activeDoc?.id && !activeDoc.audioUrl)) && (
                   <Button onClick={handleSave} disabled={isSaving}>
                     {isSaving ? <Loader2 className="animate-spin mr-2" /> : <Save className="mr-2" />}
                     Save
                   </Button>
                 )}
                  {pdfState === 'loaded' && generatedAudioUrl && (
-                  <a href={generatedAudioUrl} download={`${fileName || 'audio'}-page-${currentPage}.wav`}>
+                  <a href={generatedAudioUrl} download={`${fileName || 'audio'}.wav`}>
                     <Button variant="outline">
                       <Download className="mr-2"/>
                       Download Audio
@@ -402,7 +431,7 @@ export default function ReadPage() {
                 )}
               </div>
             </header>
-            <main className="flex-1 flex items-center justify-center p-4">
+            <main className="flex-1 flex items-center justify-center p-4 overflow-auto">
               {renderContent()}
             </main>
             {pdfState === 'loaded' && (
@@ -410,10 +439,6 @@ export default function ReadPage() {
                 isSpeaking={isSpeaking}
                 isGeneratingSpeech={isGeneratingSpeech}
                 onPlayPause={handlePlayPause}
-                currentPage={currentPage}
-                totalPages={totalPages}
-                onPrevPage={() => changePage(-1)}
-                onNextPage={() => changePage(1)}
                 availableVoices={availableVoices}
                 selectedVoice={selectedVoice}
                 onVoiceChange={setSelectedVoice}

@@ -9,8 +9,10 @@ export interface Document {
   userId: string;
   fileName: string;
   pdfUrl: string;
+  audioUrl: string | null;
   currentPage: number;
   totalPages: number;
+  zoomLevel: number;
   createdAt: number;
 }
 
@@ -21,6 +23,8 @@ export async function saveDocument(docData: {
   pdfUrl: string;
   currentPage: number;
   totalPages: number;
+  audioUrl?: string | null;
+  zoomLevel?: number;
 }): Promise<Document> {
   const session = await getSession();
   if (!session?.userId) {
@@ -38,7 +42,10 @@ export async function saveDocument(docData: {
     }
     const updatedDoc: Document = {
       ...existingDoc,
-      currentPage: docData.currentPage,
+      ...docData,
+      audioUrl: docData.audioUrl || existingDoc.audioUrl,
+      zoomLevel: docData.zoomLevel || existingDoc.zoomLevel,
+      currentPage: docData.currentPage || existingDoc.currentPage,
     };
     await kv.set(`doc:${docId}`, updatedDoc);
     return updatedDoc;
@@ -51,8 +58,10 @@ export async function saveDocument(docData: {
       userId,
       fileName: docData.fileName,
       pdfUrl: docData.pdfUrl,
+      audioUrl: docData.audioUrl || null,
       currentPage: docData.currentPage,
       totalPages: docData.totalPages,
+      zoomLevel: docData.zoomLevel || 1,
       createdAt: Date.now(),
     };
     await kv.set(`doc:${docId}`, newDoc);
