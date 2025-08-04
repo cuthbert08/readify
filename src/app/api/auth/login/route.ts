@@ -1,3 +1,4 @@
+
 'use server';
 
 import { kv } from '@vercel/kv';
@@ -24,10 +25,10 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ message: 'Invalid credentials' }, { status: 401 });
     }
 
-    await createSession(user.id, user.isAdmin);
+    await createSession({ userId: user.id, isAdmin: user.isAdmin });
 
     console.log(`Login successful for ${email}, isAdmin: ${user.isAdmin}`);
-    return NextResponse.json({ success: true, isAdmin: user.isAdmin }, { status: 200 });
+    return NextResponse.json({ success: true, isAdmin: user.isAdmin });
 
   } catch (error) {
     console.error('Login API Error:', error);
