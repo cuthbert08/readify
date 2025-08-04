@@ -1,3 +1,4 @@
+
 import { NextRequest, NextResponse } from 'next/server';
 import { getSession } from '@/lib/session';
 
@@ -12,30 +13,31 @@ export async function middleware(req: NextRequest) {
   const isProtectedRoute = protectedRoutes.some((p) => path.startsWith(p));
   const isPublicRoute = publicRoutes.includes(path);
   const isAdminRoute = adminRoutes.some((p) => path.startsWith(p));
-  
-  // If trying to access an admin route
+
+  // Handle admin route access first and foremost
   if (isAdminRoute) {
+    // If user is not an admin, redirect to login page
     if (!session?.isAdmin) {
-      console.log(`Middleware: Admin access denied to ${path}. Redirecting to login.`);
       return NextResponse.redirect(new URL('/', req.nextUrl));
     }
-    // If admin, allow access
+    // If user is an admin, allow access
     return NextResponse.next();
   }
 
-  // If trying to access a protected route for regular users
-  if (isProtectedRoute && !session?.userId) {
-    // If not logged in, redirect to login
-    return NextResponse.redirect(new URL('/', req.nextUrl));
-  }
-
-  // If a logged-in user tries to access a public-only page (like the login page)
+  // If a logged-in user (admin or not) tries to access a public-only page (like login)
   if (isPublicRoute && session?.userId) {
     // Redirect them to their appropriate dashboard
     const url = session.isAdmin ? '/admin' : '/read';
     return NextResponse.redirect(new URL(url, req.nextUrl));
   }
+  
+  // Handle protected routes for regular (non-admin) users
+  if (isProtectedRoute && !session?.userId) {
+    // If not logged in, redirect to login
+    return NextResponse.redirect(new URL('/', req.nextUrl));
+  }
 
+  // Allow all other requests to pass through
   return NextResponse.next();
 }
 
