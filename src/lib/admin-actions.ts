@@ -1,3 +1,4 @@
+
 'use server';
 
 import { kv } from '@vercel/kv';
@@ -33,29 +34,43 @@ export async function getAllUsers(): Promise<User[]> {
   await checkAdmin();
   const userKeys = await kv.keys('user-by-id:*');
   if (userKeys.length === 0) return [];
-  const users = await kv.mget<User[]>(...userKeys);
-  return users.filter((u): u is User => u !== null).sort((a, b) => b.createdAt - a.createdAt);
+
+  const usersRaw = await kv.mget<string[]>(...userKeys);
+  return usersRaw
+    .filter((u): u is string => u !== null)
+    .map(u => JSON.parse(u))
+    .sort((a, b) => b.createdAt - a.createdAt);
 }
 
 export async function getAllDocuments(): Promise<Document[]> {
   await checkAdmin();
   const docKeys = await kv.keys('doc:*');
   if (docKeys.length === 0) return [];
-  const docs = await kv.mget<Document[]>(...docKeys);
-  return docs.filter((d): d is Document => d !== null).sort((a, b) => b.createdAt - a.createdAt);
+  
+  const docsRaw = await kv.mget<string[]>(...docKeys);
+  return docsRaw
+    .filter((d): d is string => d !== null)
+    .map(d => JSON.parse(d))
+    .sort((a, b) => b.createdAt - a.createdAt);
 }
+
 
 export async function deleteUser(userId: string) {
   await checkAdmin();
-  const user = await kv.get<User>(`user-by-id:${userId}`);
-  if (!user) throw new Error('User not found');
+  
+  const userRaw = await kv.get<string>(`user-by-id:${userId}`);
+  if (!userRaw) throw new Error('User not found');
+  const user: User = JSON.parse(userRaw);
+
   if (user.isAdmin) throw new Error('Cannot delete an admin user.');
 
   const docIds = await kv.lrange(`user:${userId}:docs`, 0, -1);
   const pipeline = kv.pipeline();
   
   if (docIds.length > 0) {
-    docIds.forEach(id => pipeline.del(`doc:${id}`));
+    const docKeysToDelete = docIds.map(id => `doc:${id}`);
+    // @ts-ignore
+    pipeline.del(...docKeysToDelete);
   }
   
   pipeline.del(`user:${userId}:docs`);
