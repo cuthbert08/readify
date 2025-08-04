@@ -21,16 +21,12 @@ const AvailableVoicesOutputSchema = z.array(
 export type AvailableVoicesOutput = z.infer<typeof AvailableVoicesOutputSchema>;
 
 const availableVoices = [
-    { name: 'text-to-speech/en-US-Standard-A', displayName: 'Standard A', gender: 'Female' },
-    { name: 'text-to-speech/en-US-Standard-B', displayName: 'Standard B', gender: 'Male' },
-    { name: 'text-to-speech/en-US-Standard-C', displayName: 'Standard C', gender: 'Female' },
-    { name: 'text-to-speech/en-US-Standard-D', displayName: 'Standard D', gender: 'Male' },
-    { name: 'text-to-speech/en-US-Standard-E', displayName: 'Standard E', gender: 'Female' },
-    { name: 'text-to-speech/en-US-Standard-F', displayName: 'Standard F', gender: 'Female' },
-    { name: 'text-to-speech/en-US-Standard-G', displayName: 'Standard G', gender: 'Female' },
-    { name: 'text-to-speech/en-US-Standard-H', displayName: 'Standard H', gender: 'Female' },
-    { name: 'text-to-speech/en-US-Standard-I', displayName: 'Standard I', gender: 'Male' },
-    { name: 'text-to-speech/en-US-Standard-J', displayName: 'Standard J', gender: 'Male' },
+    { name: 'alloy', displayName: 'Alloy', gender: 'Neutral' },
+    { name: 'echo', displayName: 'Echo', gender: 'Male' },
+    { name: 'fable', displayName: 'Fable', gender: 'Male' },
+    { name: 'onyx', displayName: 'Onyx', gender: 'Male' },
+    { name: 'nova', displayName: 'Nova', gender: 'Female' },
+    { name: 'shimmer', displayName: 'Shimmer', gender: 'Female' },
 ];
 
 export async function getAvailableVoices(): Promise<AvailableVoicesOutput> {

@@ -18,7 +18,7 @@ import { summarizePdf, SummarizePdfOutput } from '@/ai/flows/summarize-pdf';
 import { chatWithPdf, ChatWithPdfOutput } from '@/ai/flows/chat-with-pdf';
 import { generateGlossary, GenerateGlossaryOutput, GlossaryItem } from '@/ai/flows/glossary-flow';
 import { explainText, ExplainTextOutput } from '@/ai/flows/explain-text-flow';
-import { generateQuiz, GenerateQuizOutput } from '@/ai/flows/quiz-flow';
+import { generateQuiz, type GenerateQuizOutput } from '@/ai/flows/quiz-flow';
 import { Sidebar, SidebarHeader, SidebarMenu, SidebarMenuItem, SidebarMenuButton, SidebarFooter, SidebarContent } from '@/components/ui/sidebar';
 import { getDocuments, saveDocument, Document, getUserSession } from '@/lib/db';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -71,7 +71,7 @@ export default function ReadPage() {
     const [currentSentence, setCurrentSentence] = useState<Sentence | null>(null);
   
     const [availableVoices, setAvailableVoices] = useState<AvailableVoicesOutput>([]);
-    const [selectedVoice, setSelectedVoice] = useState<string>('text-to-speech/en-US-Standard-A');
+    const [selectedVoice, setSelectedVoice] = useState<string>('alloy');
     const [speakingRate, setSpeakingRate] = useState(1);
     const [playbackRate, setPlaybackRate] = useState(1);
     
@@ -342,7 +342,7 @@ export default function ReadPage() {
         setIsGeneratingSpeech(true);
         const result = await generateSpeech({ 
             text: documentText, 
-            voice: selectedVoice,
+            voice: selectedVoice as any,
             speakingRate: speakingRate,
         });
         setIsGeneratingSpeech(false);
@@ -366,13 +366,14 @@ export default function ReadPage() {
     };
 
     const handleAudioTimeUpdate = () => {
-        if (!audioRef.current || !activeDoc?.sentences) {
+        if (!audioRef.current || !activeDoc?.sentences?.length) {
             setCurrentSentence(null);
             return;
         }
         const currentTime = audioRef.current.currentTime;
-        const sentence = activeDoc.sentences.find(s => currentTime >= s.startTime && currentTime < s.endTime);
-        setCurrentSentence(sentence || null);
+        // The sentence highlighting feature is disabled as OpenAI TTS doesn't support it.
+        // const sentence = activeDoc.sentences.find(s => currentTime >= s.startTime && currentTime < s.endTime);
+        // setCurrentSentence(sentence || null);
 
         setAudioCurrentTime(currentTime);
         if (audioDuration > 0) {
@@ -382,7 +383,7 @@ export default function ReadPage() {
   
     const handlePreviewVoice = async (voice: string) => {
       try {
-        const result = await previewSpeech({ voice });
+        const result = await previewSpeech({ voice: voice as any });
         if (result.audioDataUri && previewAudioRef.current) {
           previewAudioRef.current.src = result.audioDataUri;
           previewAudioRef.current.play();

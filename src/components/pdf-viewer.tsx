@@ -55,20 +55,25 @@ const PageCanvas: React.FC<{
         setIsRendered(true);
         if (textLayerRef.current) {
             const textContent = await page.getTextContent();
+            // Manually render text layer for selection
             const textLayerSpans = textContent.items.map((item, index) => {
                 const textItem = item as PdfTextItem;
+                const tx = textItem.transform;
                 const style: React.CSSProperties = {
-                    left: `${textItem.transform[4]}px`,
-                    top: `${textItem.transform[5]}px`,
+                    left: `${tx[4]}px`,
+                    top: `${tx[5]}px`,
                     height: `${textItem.height}px`,
                     width: `${textItem.width}px`,
-                    transform: `scale(${textItem.transform[0]}, ${textItem.transform[3]})`,
+                    fontFamily: 'sans-serif', // Should match PDF font if possible
+                    fontSize: `${Math.sqrt(tx[0] * tx[0] + tx[1] * tx[1])}px`,
+                    transform: `scaleX(${tx[0]})`,
                     position: 'absolute',
-                    opacity: 0.2,
-                    transformOrigin: '0% 0%',
+                    whiteSpace: 'pre',
                     color: 'transparent',
                     WebkitFontSmoothing: 'antialiased',
+                    transformOrigin: '0% 0%',
                 };
+
                 return <span key={index} style={style}>{textItem.str}</span>;
             });
             setTextLayerItems(textLayerSpans);
@@ -82,7 +87,9 @@ const PageCanvas: React.FC<{
 
   const handleMouseUp = () => {
     const selection = window.getSelection();
-    if (!selection || selection.rangeCount === 0) return;
+    if (!selection || selection.rangeCount === 0 || selection.isCollapsed) {
+        return;
+    };
     
     const range = selection.getRangeAt(0);
     const selectedText = range.toString().trim();
@@ -93,54 +100,11 @@ const PageCanvas: React.FC<{
     }
   }
 
-  const getHighlightBoxes = (): React.CSSProperties[] => {
+  const getHighlightBoxes = (): React.ReactElement[] => {
     if (!highlightSentence || !textItems.length || !isRendered) return [];
   
-    const sentenceText = highlightSentence.text.trim();
-  
-    // This is a simplified approach. A real implementation would need to handle
-    // sentences spanning multiple text items and partial matches.
-    const itemsInSentence: TextItem[] = [];
-    let remainingSentence = sentenceText;
-    
-    const allTextOnPage = textItems.map(i => i.text).join('');
-    const startIndex = allTextOnPage.indexOf(sentenceText);
-
-    if (startIndex === -1) return [];
-
-    let charCount = 0;
-    let sentenceItems: TextItem[] = [];
-    for(const item of textItems) {
-        if(charCount + item.text.length > startIndex && charCount < startIndex + sentenceText.length) {
-            sentenceItems.push(item);
-        }
-        charCount += item.text.length;
-    }
-
-
-    if (sentenceItems.length > 0) {
-       const firstItem = sentenceItems[0];
-       const lastItem = sentenceItems[sentenceItems.length - 1];
-       
-       const startX = firstItem.transform[4];
-       const startY = firstItem.transform[5] - firstItem.height;
-
-       const endX = lastItem.transform[4] + lastItem.width;
-       
-       return [{
-           left: `${startX * scale}px`,
-           top: `${startY * scale}px`,
-           width: `${(endX - startX) * scale}px`,
-           height: `${firstItem.height * scale * 1.2}px`,
-           position: 'absolute',
-           backgroundColor: 'rgba(255, 255, 0, 0.4)',
-           zIndex: 2,
-           pointerEvents: 'none',
-           borderRadius: '2px',
-       }]
-
-    }
-  
+    // Highlighting based on sentence is disabled as it's not supported by the current TTS engine.
+    // This function is kept for potential future use if a different TTS engine is used.
     return [];
   };
 
@@ -152,7 +116,7 @@ const PageCanvas: React.FC<{
                 {textLayerItems}
              </div>
         )}
-        {getHighlightBoxes().map((style, i) => <div key={i} style={style} />)}
+        {getHighlightBoxes()}
     </div>
   );
 });
