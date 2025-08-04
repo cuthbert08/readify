@@ -409,203 +409,184 @@ export default function ReadPage() {
       }
     }, [currentPage, activeDoc, fileName, totalPages, isSaving, zoomLevel]);
   
-    const renderContent = () => {
-      switch (pdfState) {
-        case 'loading':
-          return (
-            <div className="flex flex-col items-center justify-center h-full text-center space-y-4">
-              <Loader2 className="w-16 h-16 text-primary animate-spin" />
-              <p className="text-lg font-medium">Loading PDF...</p>
-              <Progress value={loadingProgress} className="w-full max-w-md" />
-            </div>
-          );
-        case 'loaded':
-          return (
-             <PdfViewer pdfDoc={activeDoc?.doc || null} scale={zoomLevel} />
-          );
-        case 'error':
-          return (
-            <div className="flex flex-col items-center justify-center h-full text-center space-y-4">
-              <p className="text-destructive">Failed to load PDF.</p>
-              <Button onClick={() => fileInputRef.current?.click()}>Try another file</Button>
-            </div>
-          );
-        case 'idle':
-        default:
-          return (
-            <div className="flex flex-col items-center justify-center h-full text-center space-y-4 p-8 border-2 border-dashed border-primary/50 rounded-2xl cursor-pointer hover:bg-primary/5 transition-colors duration-300"
-              onClick={() => fileInputRef.current?.click()}>
-              <UploadCloud className="w-16 h-16 text-primary" />
-              <h2 className="text-2xl font-headline">Upload your PDF</h2>
-              <p className="text-muted-foreground">Click or drag & drop a file to start reading</p>
-            </div>
-          );
-      }
-    };
-  
     return (
       <TooltipProvider>
         <div className="flex h-screen w-full bg-background">
           <input type="file" ref={fileInputRef} onChange={handleFileChange} accept="application/pdf" className="hidden" />
-          {isSidebarOpen && (
-            <Sidebar>
-              <SidebarHeader>
-                 <div className="flex items-center justify-between">
-                    <h1 className="text-2xl font-headline text-primary">Readify</h1>
-                 </div>
-              </SidebarHeader>
-              <SidebarContent>
-                <SidebarMenu>
-                  <SidebarMenuItem>
-                    <SidebarMenuButton onClick={() => fileInputRef.current?.click()}>
-                      <UploadCloud />
-                      Upload New PDF
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
-                   <Separator className="my-2" />
-                   <div>
-                      <div className="p-2 text-sm font-semibold flex items-center gap-2 text-muted-foreground">
-                          <Settings />
-                          Audio Settings
-                      </div>
-                      <div className="p-2 space-y-4">
-                          <div className='space-y-2'>
-                              <Label>Voice</Label>
-                              <Select value={selectedVoice} onValueChange={setSelectedVoice} disabled={isSpeaking || isGeneratingSpeech}>
-                                  <SelectTrigger>
-                                      <SelectValue placeholder="Select a voice" />
-                                  </SelectTrigger>
-                                  <SelectContent>
-                                      {availableVoices.map((voice) => (
-                                      <div key={voice.name} className="flex items-center justify-between pr-2">
-                                          <SelectItem value={voice.name} className="flex-1">
-                                              {voice.name} ({voice.lang})
-                                          </SelectItem>
-                                          <Button 
-                                              variant="ghost" 
-                                              size="icon" 
-                                              className="h-7 w-7 ml-2 shrink-0"
-                                              onClick={(e) => {
-                                                  e.stopPropagation();
-                                                  handlePreviewVoice(voice.name);
-                                              }}
-                                              aria-label={`Preview voice ${voice.name}`}
-                                          >
-                                              <Volume2 className="h-4 w-4" />
-                                          </Button>
-                                      </div>
-                                      ))}
-                                  </SelectContent>
-                              </Select>
-                          </div>
-                          <div className='space-y-2'>
-                             <Label htmlFor="speaking-rate">Speaking Rate: {speakingRate.toFixed(2)}x</Label>
-                             <Slider id="speaking-rate" min={0.25} max={4.0} step={0.25} value={[speakingRate]} onValueChange={(v) => setSpeakingRate(v[0])} disabled={isSpeaking || isGeneratingSpeech} />
-                          </div>
-                          <div className='space-y-2'>
-                             <Label htmlFor="pitch">Pitch: {pitch.toFixed(1)}</Label>
-                             <Slider id="pitch" min={-20} max={20} step={0.5} value={[pitch]} onValueChange={(v) => setPitch(v[0])} disabled={isSpeaking || isGeneratingSpeech}/>
-                          </div>
-                      </div>
-                   </div>
-  
-                  <Separator className="my-2" />
-                   <div>
-                    <div className="p-2 text-sm font-semibold flex items-center gap-2 text-muted-foreground">
-                      <Bot />
-                      AI Tools
-                    </div>
-                     <SidebarMenuItem>
-                        <SidebarMenuButton onClick={() => handleAiAction('summary')} disabled={pdfState !== 'loaded'}>
-                          <Lightbulb />
-                          Summarize & Key Points
-                        </SidebarMenuButton>
-                     </SidebarMenuItem>
-                     <SidebarMenuItem>
-                        <SidebarMenuButton onClick={() => handleAiAction('chat')} disabled={pdfState !== 'loaded'}>
-                          <HelpCircle />
-                          Ask a Question
-                        </SidebarMenuButton>
-                     </SidebarMenuItem>
-                   </div>
+          <Sidebar>
+            <SidebarHeader>
+                <div className="flex items-center justify-between">
+                  <h1 className="text-2xl font-headline text-primary">Readify</h1>
+                </div>
+            </SidebarHeader>
+            <SidebarContent>
+              <SidebarMenu>
+                <SidebarMenuItem>
+                  <SidebarMenuButton onClick={() => fileInputRef.current?.click()}>
+                    <UploadCloud />
+                    Upload New PDF
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
                   <Separator className="my-2" />
                   <div>
-                     <div className="p-2 text-sm font-semibold flex items-center gap-2 text-muted-foreground">
-                      <Library />
-                      My Documents
-                     </div>
-                  </div>
-                  {activeDoc && !activeDoc.id && (
-                    <SidebarMenuItem>
-                       <div className={cn(
-                          "peer/menu-button flex w-full items-center gap-2 overflow-hidden rounded-md p-2 text-left text-sm outline-none ring-sidebar-ring transition-[width,height,padding] hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:ring-2 active:bg-sidebar-accent active:text-sidebar-accent-foreground disabled:pointer-events-none disabled:opacity-50 group-has-[[data-sidebar=menu-action]]/menu-item:pr-8 aria-disabled:pointer-events-none aria-disabled:opacity-50 data-[active=true]:bg-sidebar-accent data-[active=true]:font-medium data-[active=true]:text-sidebar-accent-foreground data-[state=open]:hover:bg-sidebar-accent data-[state=open]:hover:text-sidebar-accent-foreground",
-                          "bg-sidebar-accent font-medium text-sidebar-accent-foreground"
-                       )}>
-                        <FileText />
-                        <div className="flex-1 flex items-center justify-between">
-                          <span className="truncate max-w-[150px]">{fileName}</span>
-                           <Tooltip>
-                              <TooltipTrigger asChild>
-                                  <Button variant="ghost" size="icon" className="h-7 w-7" onClick={handleSave} disabled={isSaving}>
-                                      {isSaving ? <Loader2 className="h-4 w-4 animate-spin"/> : <CloudOff className="h-4 w-4 text-muted-foreground" />}
-                                  </Button>
-                              </TooltipTrigger>
-                              <TooltipContent>
-                                  <p>Not saved. Click to save to cloud.</p>
-                              </TooltipContent>
-                          </Tooltip>
+                    <div className="p-2 text-sm font-semibold flex items-center gap-2 text-muted-foreground">
+                        <Settings />
+                        Audio Settings
+                    </div>
+                    <div className="p-2 space-y-4">
+                        <div className='space-y-2'>
+                            <Label>Voice</Label>
+                            <Select value={selectedVoice} onValueChange={setSelectedVoice} disabled={isSpeaking || isGeneratingSpeech}>
+                                <SelectTrigger>
+                                    <SelectValue placeholder="Select a voice" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    {availableVoices.map((voice) => (
+                                    <div key={voice.name} className="flex items-center justify-between pr-2">
+                                        <SelectItem value={voice.name} className="flex-1">
+                                            {voice.name} ({voice.lang})
+                                        </SelectItem>
+                                        <Button 
+                                            variant="ghost" 
+                                            size="icon" 
+                                            className="h-7 w-7 ml-2 shrink-0"
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                handlePreviewVoice(voice.name);
+                                            }}
+                                            aria-label={`Preview voice ${voice.name}`}
+                                        >
+                                            <Volume2 className="h-4 w-4" />
+                                        </Button>
+                                    </div>
+                                    ))}
+                                </SelectContent>
+                            </Select>
                         </div>
-                       </div>
-                    </SidebarMenuItem>
-                  )}
-                    {userDocuments.map((doc) => (
-                       <SidebarMenuItem key={doc.id}>
-                          <SidebarMenuButton variant="ghost" onClick={() => handleSelectDocument(doc)} isActive={activeDoc?.id === doc.id}>
-                            <FileText />
-                            <div className="flex-1 flex items-center justify-between">
-                              <span className="truncate max-w-[150px]">{doc.fileName}</span>
-                               <Tooltip>
-                                  <TooltipTrigger asChild>
-                                    <Cloud className="h-4 w-4 text-primary" />
-                                  </TooltipTrigger>
-                                  <TooltipContent>
-                                      <p>Saved to cloud</p>
-                                  </TooltipContent>
-                              </Tooltip>
-                            </div>
-                          </SidebarMenuButton>
-                       </SidebarMenuItem>
-                    ))}
-                </SidebarMenu>
-              </SidebarContent>
-              <SidebarFooter>
-                <div className="flex items-center gap-3 p-2">
-                  <Avatar>
-                    <AvatarImage data-ai-hint="user avatar" src="https://placehold.co/40x40.png" />
-                    <AvatarFallback>U</AvatarFallback>
-                  </Avatar>
-                  <div className="flex-1 overflow-hidden">
-                    <p className="text-sm font-medium truncate">User</p>
+                        <div className='space-y-2'>
+                            <Label htmlFor="speaking-rate">Speaking Rate: {speakingRate.toFixed(2)}x</Label>
+                            <Slider id="speaking-rate" min={0.25} max={4.0} step={0.25} value={[speakingRate]} onValueChange={(v) => setSpeakingRate(v[0])} disabled={isSpeaking || isGeneratingSpeech} />
+                        </div>
+                        <div className='space-y-2'>
+                            <Label htmlFor="pitch">Pitch: {pitch.toFixed(1)}</Label>
+                            <Slider id="pitch" min={-20} max={20} step={0.5} value={[pitch]} onValueChange={(v) => setPitch(v[0])} disabled={isSpeaking || isGeneratingSpeech}/>
+                        </div>
+                    </div>
                   </div>
-                  <Button onClick={handleLogout} variant="ghost" size="icon">
-                      <LogOut className="h-5 w-5"/>
-                      <span className="sr-only">Log out</span>
-                  </Button>
+
+                <Separator className="my-2" />
+                  <div>
+                  <div className="p-2 text-sm font-semibold flex items-center gap-2 text-muted-foreground">
+                    <Bot />
+                    AI Tools
+                  </div>
+                    <SidebarMenuItem>
+                      <SidebarMenuButton onClick={() => handleAiAction('summary')} disabled={pdfState !== 'loaded'}>
+                        <Lightbulb />
+                        Summarize & Key Points
+                      </SidebarMenuButton>
+                    </SidebarMenuItem>
+                    <SidebarMenuItem>
+                      <SidebarMenuButton onClick={() => handleAiAction('chat')} disabled={pdfState !== 'loaded'}>
+                        <HelpCircle />
+                        Ask a Question
+                      </SidebarMenuButton>
+                    </SidebarMenuItem>
+                  </div>
+                <Separator className="my-2" />
+                <div>
+                    <div className="p-2 text-sm font-semibold flex items-center gap-2 text-muted-foreground">
+                    <Library />
+                    My Documents
+                    </div>
                 </div>
-              </SidebarFooter>
-            </Sidebar>
-          )}
+                {activeDoc && !activeDoc.id && (
+                  <SidebarMenuItem>
+                      <div className={cn(
+                        "peer/menu-button flex w-full items-center gap-2 overflow-hidden rounded-md p-2 text-left text-sm outline-none ring-sidebar-ring transition-[width,height,padding] hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:ring-2 active:bg-sidebar-accent active:text-sidebar-accent-foreground disabled:pointer-events-none disabled:opacity-50 group-has-[[data-sidebar=menu-action]]/menu-item:pr-8 aria-disabled:pointer-events-none aria-disabled:opacity-50 data-[active=true]:bg-sidebar-accent data-[active=true]:font-medium data-[active=true]:text-sidebar-accent-foreground data-[state=open]:hover:bg-sidebar-accent data-[state=open]:hover:text-sidebar-accent-foreground",
+                        "bg-sidebar-accent font-medium text-sidebar-accent-foreground"
+                      )}>
+                      <FileText />
+                      <div className="flex-1 flex items-center justify-between">
+                        <span className="truncate max-w-[150px]">{fileName}</span>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                                <Button variant="ghost" size="icon" className="h-7 w-7" onClick={handleSave} disabled={isSaving}>
+                                    {isSaving ? <Loader2 className="h-4 w-4 animate-spin"/> : <CloudOff className="h-4 w-4 text-muted-foreground" />}
+                                </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                                <p>Not saved. Click to save to cloud.</p>
+                            </TooltipContent>
+                        </Tooltip>
+                      </div>
+                      </div>
+                  </SidebarMenuItem>
+                )}
+                  {userDocuments.map((doc) => (
+                      <SidebarMenuItem key={doc.id}>
+                        <SidebarMenuButton variant="ghost" onClick={() => handleSelectDocument(doc)} isActive={activeDoc?.id === doc.id}>
+                          <FileText />
+                          <div className="flex-1 flex items-center justify-between">
+                            <span className="truncate max-w-[150px]">{doc.fileName}</span>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Cloud className="h-4 w-4 text-primary" />
+                                </TooltipTrigger>
+                                <TooltipContent>
+                                    <p>Saved to cloud</p>
+                                </TooltipContent>
+                            </Tooltip>
+                          </div>
+                        </SidebarMenuButton>
+                      </SidebarMenuItem>
+                  ))}
+              </SidebarMenu>
+            </SidebarContent>
+            <SidebarFooter>
+              <div className="flex items-center gap-3 p-2">
+                <Avatar>
+                  <AvatarImage data-ai-hint="user avatar" src="https://placehold.co/40x40.png" />
+                  <AvatarFallback>U</AvatarFallback>
+                </Avatar>
+                <div className="flex-1 overflow-hidden">
+                  <p className="text-sm font-medium truncate">User</p>
+                </div>
+                <Button onClick={handleLogout} variant="ghost" size="icon">
+                    <LogOut className="h-5 w-5"/>
+                    <span className="sr-only">Log out</span>
+                </Button>
+              </div>
+            </SidebarFooter>
+          </Sidebar>
           
           <div className="flex-1 flex flex-col relative" ref={viewerContainerRef}>
-            <header className="absolute top-0 left-0 z-20 p-2">
-                {!isSidebarOpen && (
-                    <Button variant="ghost" size="icon" onClick={() => setIsSidebarOpen(true)}>
-                        <Menu />
-                    </Button>
-                )}
-            </header>
             <main className="flex-1 flex items-center justify-center overflow-auto bg-muted/30">
-                {renderContent()}
+                <div style={{ display: pdfState === 'idle' ? 'block' : 'none' }}>
+                  <div 
+                    className="flex flex-col items-center justify-center h-full text-center space-y-4 p-8 border-2 border-dashed border-primary/50 rounded-2xl cursor-pointer hover:bg-primary/5 transition-colors duration-300"
+                    onClick={() => fileInputRef.current?.click()}>
+                    <UploadCloud className="w-16 h-16 text-primary" />
+                    <h2 className="text-2xl font-headline">Upload your PDF</h2>
+                    <p className="text-muted-foreground">Click or drag & drop a file to start reading</p>
+                  </div>
+                </div>
+                <div style={{ display: pdfState === 'loading' ? 'block' : 'none' }}>
+                  <div className="flex flex-col items-center justify-center h-full text-center space-y-4">
+                    <Loader2 className="w-16 h-16 text-primary animate-spin" />
+                    <p className="text-lg font-medium">Loading PDF...</p>
+                    <Progress value={loadingProgress} className="w-full max-w-md" />
+                  </div>
+                </div>
+                <div style={{ display: pdfState === 'error' ? 'block' : 'none' }}>
+                  <div className="flex flex-col items-center justify-center h-full text-center space-y-4">
+                    <p className="text-destructive">Failed to load PDF.</p>
+                    <Button onClick={() => fileInputRef.current?.click()}>Try another file</Button>
+                  </div>
+                </div>
+                <div className="w-full h-full" style={{ display: pdfState === 'loaded' ? 'block' : 'none' }}>
+                   <PdfViewer pdfDoc={activeDoc?.doc || null} scale={zoomLevel} />
+                </div>
             </main>
             {pdfState === 'loaded' && (
                 <div className={cn("absolute inset-x-0 bottom-0 z-10 transition-opacity duration-300", showControls ? 'opacity-100' : 'opacity-0 pointer-events-none')}>
@@ -642,4 +623,5 @@ export default function ReadPage() {
         </div>
       </TooltipProvider>
     );
-}
+
+    
