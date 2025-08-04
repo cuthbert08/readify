@@ -48,7 +48,7 @@ export const generateSpeech = ai.defineFlow(
 
     const { output: analysisOutput } = await ai.generate({
         prompt: analysisPrompt,
-        model: 'googleai/gemini-2.0-flash-preview',
+        model: 'googleai/gemini-1.5-flash-latest',
         output: { schema: TextAnalysisOutputSchema },
     });
     
