@@ -4,7 +4,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import * as pdfjsLib from 'pdfjs-dist';
 import type { PDFDocumentProxy } from 'pdfjs-dist/types/src/display/api';
-import { UploadCloud, FileText, Loader2, LogOut, Save, Library, Download, Bot, Lightbulb, HelpCircle, PanelLeft, Search } from 'lucide-react';
+import { UploadCloud, FileText, Loader2, LogOut, Save, Library, Download, Bot, Lightbulb, HelpCircle, PanelLeft } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import PdfViewer from '@/components/pdf-viewer';
 import AudioPlayer from '@/components/audio-player';
@@ -16,12 +16,11 @@ import { getAvailableVoices, AvailableVoicesOutput } from '@/ai/flows/voice-sele
 import { generateSpeech, previewSpeech } from '@/ai/flows/tts-flow';
 import { summarizePdf, SummarizePdfOutput } from '@/ai/flows/summarize-pdf';
 import { chatWithPdf, ChatWithPdfOutput } from '@/ai/flows/chat-with-pdf';
-import { Sidebar, SidebarProvider, SidebarTrigger, SidebarContent, SidebarHeader, SidebarMenu, SidebarMenuItem, SidebarMenuButton, SidebarFooter, SidebarRail, SidebarGroup, useSidebar } from '@/components/ui/sidebar';
+import { Sidebar, SidebarProvider, SidebarTrigger, SidebarContent, SidebarHeader, SidebarMenu, SidebarMenuItem, SidebarMenuButton, SidebarFooter, useSidebar } from '@/components/ui/sidebar';
 import { getDocuments, saveDocument, Document } from '@/lib/db';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import AiDialog, { AiDialogType } from '@/components/ai-dialog';
 import { Separator } from '@/components/ui/separator';
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.mjs`;
@@ -73,6 +72,8 @@ const ReaderView = () => {
     const viewerRef = useRef<HTMLDivElement>(null);
     const controlsTimeoutRef = useRef<NodeJS.Timeout | null>(null);
     const router = useRouter();
+    const { state: sidebarState, isMobile } = useSidebar();
+
 
     const fetchUserDocuments = useCallback(async () => {
       try {
@@ -487,12 +488,12 @@ const ReaderView = () => {
             </SidebarFooter>
           </Sidebar>
           
-          <div className="md:flex hidden">
-             <SidebarRail />
-          </div>
-  
-  
           <div className="flex-1 flex flex-col relative" ref={viewerRef}>
+              {sidebarState === 'collapsed' && !isMobile && (
+                  <div className="absolute top-4 left-4 z-50">
+                     <SidebarTrigger />
+                  </div>
+              )}
               {pdfState === 'loaded' && (
                 <div className={cn("absolute inset-x-0 top-0 z-50 transition-opacity duration-300", showControls ? 'opacity-100' : 'opacity-0 pointer-events-none')}>
                   <PdfToolbar
@@ -511,7 +512,7 @@ const ReaderView = () => {
                   />
                 </div>
               )}
-              <main className="flex-1 flex items-center justify-center p-4 overflow-auto bg-gray-100 dark:bg-gray-900">
+              <main className="flex-1 flex items-center justify-center p-4 overflow-auto bg-muted/30">
                 {renderContent()}
               </main>
               {pdfState === 'loaded' && (
