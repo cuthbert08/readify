@@ -555,14 +555,7 @@ export default function ReadPage() {
             </SidebarHeader>
             <SidebarContent>
               <SidebarMenu>
-                 {isAdmin && (
-                    <SidebarMenuItem>
-                      <SidebarMenuButton onClick={() => router.push('/admin')}>
-                        <Home />
-                        Admin Dashboard
-                      </SidebarMenuButton>
-                    </SidebarMenuItem>
-                 )}
+                 
                 <SidebarMenuItem>
                   <SidebarMenuButton onClick={() => fileInputRef.current?.click()}>
                     <UploadCloud />
@@ -652,6 +645,14 @@ export default function ReadPage() {
                     <Library />
                     My Documents
                     </div>
+                     {isAdmin && (
+                        <SidebarMenuItem>
+                          <SidebarMenuButton onClick={() => router.push('/admin')}>
+                            <Settings />
+                            Settings
+                          </SidebarMenuButton>
+                        </SidebarMenuItem>
+                     )}
                 </div>
                  {activeDoc && !activeDoc.id && (
                   <SidebarMenuItem>
