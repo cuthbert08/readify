@@ -24,7 +24,6 @@ export type User = DbUser;
 async function checkAdmin() {
   const session = await getSession();
   if (!session?.isAdmin) {
-    console.warn('Admin check failed. Session:', session);
     throw new Error('Unauthorized: Admin access required.');
   }
 }

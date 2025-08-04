@@ -1,19 +1,17 @@
 import { SignJWT, jwtVerify } from 'jose';
 import { cookies } from 'next/headers';
-import { NextRequest, NextResponse } from 'next/server';
+import type { NextRequest } from 'next/server';
 
 const secretKey = process.env.JWT_SECRET || 'your-secret-key-for-development';
 const key = new TextEncoder().encode(secretKey);
 
 export interface SessionPayload {
     userId: string;
-    email: string;
-    name: string;
     isAdmin: boolean;
-    expires: Date;
+    expires?: Date; // Expires is used on the client-side for cookie management
 }
 
-export async function encrypt(payload: SessionPayload) {
+export async function encrypt(payload: Omit<SessionPayload, 'expires'>) {
   return await new SignJWT(payload)
     .setProtectedHeader({ alg: 'HS256' })
     .setIssuedAt()
@@ -41,20 +39,21 @@ export async function getSession(): Promise<SessionPayload | null> {
   return session;
 }
 
-export async function updateSession(request: NextRequest) {
-  const sessionCookie = request.cookies.get('session')?.value;
-  if (!sessionCookie) return;
+export async function createSession(userId: string, isAdmin: boolean) {
+    const expires = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
+    const sessionPayload = { userId, isAdmin };
+    
+    const session = await encrypt(sessionPayload);
 
-  const parsed = await decrypt(sessionCookie);
-  if (!parsed) return;
+    cookies().set('session', session, {
+      expires,
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'strict',
+      path: '/',
+    });
+}
 
-  parsed.expires = new Date(Date.now() + 24 * 60 * 60 * 1000); 
-  const res = NextResponse.next();
-  res.cookies.set({
-    name: 'session',
-    value: await encrypt(parsed),
-    httpOnly: true,
-    expires: parsed.expires,
-  });
-  return res;
+export async function deleteSession() {
+  cookies().set('session', '', { expires: new Date(0) });
 }

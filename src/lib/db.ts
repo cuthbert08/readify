@@ -32,7 +32,8 @@ export async function getUserSession() {
     if (user) {
         return {
             ...session,
-            name: user.name, // Add/confirm name from DB record
+            name: user.name,
+            email: user.email,
         };
     }
   }
