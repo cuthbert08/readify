@@ -65,6 +65,7 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
   onRewind
 }) => {
   const isGeneratingSpeech = processingStage !== 'idle' && processingStage !== 'error';
+  const hasAudio = duration > 0;
 
   return (
     <div className="p-2 md:p-4 w-full">
@@ -77,7 +78,7 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
                 </div>
             ) : (
                 <div className="flex items-center justify-between gap-4 w-full">
-                    <Button variant="ghost" size="icon" onClick={onRewind} disabled={!generatedAudioUrl}>
+                    <Button variant="ghost" size="icon" onClick={onRewind} disabled={!hasAudio}>
                         <Rewind />
                         <span className="sr-only">Rewind 10s</span>
                     </Button>
@@ -90,7 +91,7 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
                     >
                         {isSpeaking ? <Pause className="h-8 w-8" /> : <Play className="h-8 w-8" />}
                     </Button>
-                    <Button variant="ghost" size="icon" onClick={onForward} disabled={!generatedAudioUrl}>
+                    <Button variant="ghost" size="icon" onClick={onForward} disabled={!hasAudio}>
                         <FastForward />
                         <span className="sr-only">Forward 10s</span>
                     </Button>
@@ -104,7 +105,7 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
                 max={duration}
                 step={1}
                 onValueChange={(value) => onSeek(value[0])}
-                disabled={!generatedAudioUrl}
+                disabled={!hasAudio}
                 className="w-full"
             />
             <span className="text-xs font-mono">{formatTime(duration)}</span>
@@ -124,7 +125,7 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
             </Button>
             <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" size="sm" disabled={!generatedAudioUrl}>
+                  <Button variant="ghost" size="sm" disabled={!hasAudio}>
                      <Wind />
                      <span className="sr-only">Playback Speed</span>
                   </Button>
