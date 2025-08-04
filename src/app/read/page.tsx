@@ -51,11 +51,11 @@ export default function ReadPage() {
     const [currentPage, setCurrentPage] = useState(1);
     const [loadingProgress, setLoadingProgress] = useState(0);
     const [zoomLevel, setZoomLevel] = useState(1);
-    const [isFullScreen, setIsFullScreen] = useState(isSaving);
+    const [isSaving, setIsSaving] = useState(false);
+    const [isFullScreen, setIsFullScreen] = useState(false);
   
     const [documentText, setDocumentText] = useState('');
   
-    const [isSaving, setIsSaving] = useState(false);
     const [isSpeaking, setIsSpeaking] = useState(false);
     const [isGeneratingSpeech, setIsGeneratingSpeech] = useState(false);
     const [generatedAudioUrl, setGeneratedAudioUrl] = useState<string | null>(null);
