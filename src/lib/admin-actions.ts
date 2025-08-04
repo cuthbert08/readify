@@ -33,16 +33,20 @@ async function checkAdmin() {
 // Helper to safely parse KV values which might be objects or strings
 function parseKvObject<T>(item: T | string | null): T | null {
     if (item === null) return null;
+    // Attempt to parse if it's a string, this handles double-stringified JSON
     if (typeof item === 'string') {
         try {
             return JSON.parse(item);
         } catch (e) {
-            console.error("Failed to parse KV item", item);
+            // If parsing fails, it might not be a JSON string, return null or handle as needed
+            console.error("Failed to parse KV item, it might be a raw string or corrupted:", item);
             return null;
         }
     }
+    // If it's already an object, return it directly
     return item;
 }
+
 
 export async function getAllUsers(): Promise<User[]> {
   await checkAdmin();
@@ -96,3 +100,5 @@ export async function deleteUser(userId: string) {
 
   await pipeline.exec();
 }
+
+    
