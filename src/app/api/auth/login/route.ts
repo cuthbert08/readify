@@ -19,13 +19,15 @@ export async function POST(req: NextRequest) {
     if (!passwordsMatch) {
       return NextResponse.json({ message: 'Invalid credentials' }, { status: 401 });
     }
+    
+    const isAdmin = user.email === process.env.ADMIN_EMAIL || user.isAdmin;
 
     const expires = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
-    const session = await encrypt({ userId: user.id, email: user.email, expires });
+    const session = await encrypt({ userId: user.id, email: user.email, expires, isAdmin });
 
     cookies().set('session', session, { expires, httpOnly: true });
 
-    return NextResponse.json({ success: true }, { status: 200 });
+    return NextResponse.json({ success: true, isAdmin }, { status: 200 });
   } catch (error) {
     console.error(error);
     return NextResponse.json({ message: 'An error occurred' }, { status: 500 });

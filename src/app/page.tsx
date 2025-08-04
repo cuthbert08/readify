@@ -28,11 +28,16 @@ export default function AuthPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password }),
       });
+      
+      const data = await response.json();
 
       if (response.ok) {
-        router.push('/read');
+        if (data.isAdmin) {
+          router.push('/admin');
+        } else {
+          router.push('/read');
+        }
       } else {
-        const data = await response.json();
         toast({
           variant: "destructive",
           title: "Login Failed",

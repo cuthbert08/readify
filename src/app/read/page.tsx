@@ -4,7 +4,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import * as pdfjsLib from 'pdfjs-dist';
 import type { PDFDocumentProxy } from 'pdfjs-dist/types/src/display/api';
-import { UploadCloud, FileText, Loader2, LogOut, Save, Library, Download, Bot, Lightbulb, HelpCircle, Cloud, CloudOff, Settings, Menu } from 'lucide-react';
+import { UploadCloud, FileText, Loader2, LogOut, Save, Library, Download, Bot, Lightbulb, HelpCircle, Cloud, CloudOff, Settings, Menu, Home, BarChart } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import PdfViewer from '@/components/pdf-viewer';
 import AudioPlayer from '@/components/audio-player';
@@ -27,6 +27,8 @@ import { Label } from '@/components/ui/label';
 import { Slider } from '@/components/ui/slider';
 import { Volume2 } from 'lucide-react';
 import { useMediaQuery } from '@/hooks/use-media-query';
+import { getSession } from '@/lib/session';
+
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.mjs`;
 
@@ -72,7 +74,7 @@ export default function ReadPage() {
     const [aiChatOutput, setAiChatOutput] = useState<ChatWithPdfOutput | null>(null);
     
     const [showControls, setShowControls] = useState(true);
-    const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+    const [isAdmin, setIsAdmin] = useState(false);
 
     const { toast } = useToast();
     const fileInputRef = useRef<HTMLInputElement>(null);
@@ -82,11 +84,15 @@ export default function ReadPage() {
     const controlsTimeoutRef = useRef<NodeJS.Timeout | null>(null);
     const router = useRouter();
 
-    const isDesktop = useMediaQuery("(min-width: 768px)");
-
     useEffect(() => {
-      setIsSidebarOpen(isDesktop);
-    }, [isDesktop]);
+      async function checkSession() {
+        const session = await getSession();
+        if (session?.isAdmin) {
+          setIsAdmin(true);
+        }
+      }
+      checkSession();
+    }, []);
 
     const fetchUserDocuments = useCallback(async () => {
       try {
@@ -368,7 +374,7 @@ export default function ReadPage() {
     }
   
     const toggleFullScreen = () => {
-      const element = document.documentElement; // Use documentElement for whole page fullscreen
+      const element = document.documentElement; 
       if (!element) return;
   
       if (!document.fullscreenElement) {
@@ -408,6 +414,37 @@ export default function ReadPage() {
         return () => clearTimeout(timer);
       }
     }, [currentPage, activeDoc, fileName, totalPages, isSaving, zoomLevel]);
+
+    const renderContent = () => {
+      switch (pdfState) {
+        case 'loading':
+          return (
+            <div className="flex flex-col items-center justify-center h-full text-center space-y-4">
+              <Loader2 className="w-16 h-16 text-primary animate-spin" />
+              <p className="text-lg font-medium">Loading PDF...</p>
+              <Progress value={loadingProgress} className="w-full max-w-md" />
+            </div>
+          );
+        case 'error':
+          return (
+            <div className="flex flex-col items-center justify-center h-full text-center space-y-4">
+              <p className="text-destructive">Failed to load PDF.</p>
+              <Button onClick={() => fileInputRef.current?.click()}>Try another file</Button>
+            </div>
+          );
+        case 'idle':
+        default:
+          return (
+            <div 
+              className="flex flex-col items-center justify-center h-full text-center space-y-4 p-8 border-2 border-dashed border-primary/50 rounded-2xl cursor-pointer hover:bg-primary/5 transition-colors duration-300"
+              onClick={() => fileInputRef.current?.click()}>
+              <UploadCloud className="w-16 h-16 text-primary" />
+              <h2 className="text-2xl font-headline">Upload your PDF</h2>
+              <p className="text-muted-foreground">Click or drag & drop a file to start reading</p>
+            </div>
+          );
+      }
+    }
   
     return (
       <TooltipProvider>
@@ -416,11 +453,19 @@ export default function ReadPage() {
           <Sidebar>
             <SidebarHeader>
                 <div className="flex items-center justify-between">
-                  <h1 className="text-2xl font-headline text-primary">Readify</h1>
+                  <h1 className="text-2xl font-headline text-primary flex items-center gap-2"><BarChart /> Readify</h1>
                 </div>
             </SidebarHeader>
             <SidebarContent>
               <SidebarMenu>
+                 {isAdmin && (
+                    <SidebarMenuItem>
+                      <SidebarMenuButton onClick={() => router.push('/admin')}>
+                        <Home />
+                        Admin Dashboard
+                      </SidebarMenuButton>
+                    </SidebarMenuItem>
+                 )}
                 <SidebarMenuItem>
                   <SidebarMenuButton onClick={() => fileInputRef.current?.click()}>
                     <UploadCloud />
@@ -500,15 +545,20 @@ export default function ReadPage() {
                     My Documents
                     </div>
                 </div>
-                {activeDoc && !activeDoc.id && (
+                 {activeDoc && !activeDoc.id && (
                   <SidebarMenuItem>
                       <div className={cn(
-                        "peer/menu-button flex w-full items-center gap-2 overflow-hidden rounded-md p-2 text-left text-sm outline-none ring-sidebar-ring transition-[width,height,padding] hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:ring-2 active:bg-sidebar-accent active:text-sidebar-accent-foreground disabled:pointer-events-none disabled:opacity-50 group-has-[[data-sidebar=menu-action]]/menu-item:pr-8 aria-disabled:pointer-events-none aria-disabled:opacity-50 data-[active=true]:bg-sidebar-accent data-[active=true]:font-medium data-[active=true]:text-sidebar-accent-foreground data-[state=open]:hover:bg-sidebar-accent data-[state=open]:hover:text-sidebar-accent-foreground",
+                        "flex w-full items-center gap-2 overflow-hidden rounded-md p-2 text-left text-sm",
                         "bg-sidebar-accent font-medium text-sidebar-accent-foreground"
                       )}>
                       <FileText />
                       <div className="flex-1 flex items-center justify-between">
-                        <span className="truncate max-w-[150px]">{fileName}</span>
+                         <Tooltip>
+                            <TooltipTrigger asChild>
+                                <span className="truncate max-w-[150px]">{fileName}</span>
+                            </TooltipTrigger>
+                            <TooltipContent><p>{fileName}</p></TooltipContent>
+                         </Tooltip>
                           <Tooltip>
                             <TooltipTrigger asChild>
                                 <Button variant="ghost" size="icon" className="h-7 w-7" onClick={handleSave} disabled={isSaving}>
@@ -525,10 +575,20 @@ export default function ReadPage() {
                 )}
                   {userDocuments.map((doc) => (
                       <SidebarMenuItem key={doc.id}>
-                        <SidebarMenuButton variant="ghost" onClick={() => handleSelectDocument(doc)} isActive={activeDoc?.id === doc.id}>
-                          <FileText />
-                          <div className="flex-1 flex items-center justify-between">
-                            <span className="truncate max-w-[150px]">{doc.fileName}</span>
+                        <div className={cn(
+                          "flex w-full items-center gap-2 overflow-hidden rounded-md p-2 text-left text-sm",
+                          activeDoc?.id === doc.id && "bg-sidebar-accent font-medium text-sidebar-accent-foreground"
+                        )}>
+                            <FileText />
+                            <div className="flex-1 flex items-center justify-between">
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                    <button onClick={() => handleSelectDocument(doc)} className="truncate max-w-[150px] text-left hover:underline">
+                                        {doc.fileName}
+                                    </button>
+                                </TooltipTrigger>
+                                <TooltipContent><p>{doc.fileName}</p></TooltipContent>
+                              </Tooltip>
                               <Tooltip>
                                 <TooltipTrigger asChild>
                                   <Cloud className="h-4 w-4 text-primary" />
@@ -537,8 +597,8 @@ export default function ReadPage() {
                                     <p>Saved to cloud</p>
                                 </TooltipContent>
                             </Tooltip>
-                          </div>
-                        </SidebarMenuButton>
+                            </div>
+                        </div>
                       </SidebarMenuItem>
                   ))}
               </SidebarMenu>
@@ -562,28 +622,7 @@ export default function ReadPage() {
           
           <div className="flex-1 flex flex-col relative" ref={viewerContainerRef}>
             <main className="flex-1 flex items-center justify-center overflow-auto bg-muted/30">
-                <div style={{ display: pdfState === 'idle' ? 'block' : 'none' }}>
-                  <div 
-                    className="flex flex-col items-center justify-center h-full text-center space-y-4 p-8 border-2 border-dashed border-primary/50 rounded-2xl cursor-pointer hover:bg-primary/5 transition-colors duration-300"
-                    onClick={() => fileInputRef.current?.click()}>
-                    <UploadCloud className="w-16 h-16 text-primary" />
-                    <h2 className="text-2xl font-headline">Upload your PDF</h2>
-                    <p className="text-muted-foreground">Click or drag & drop a file to start reading</p>
-                  </div>
-                </div>
-                <div style={{ display: pdfState === 'loading' ? 'block' : 'none' }}>
-                  <div className="flex flex-col items-center justify-center h-full text-center space-y-4">
-                    <Loader2 className="w-16 h-16 text-primary animate-spin" />
-                    <p className="text-lg font-medium">Loading PDF...</p>
-                    <Progress value={loadingProgress} className="w-full max-w-md" />
-                  </div>
-                </div>
-                <div style={{ display: pdfState === 'error' ? 'block' : 'none' }}>
-                  <div className="flex flex-col items-center justify-center h-full text-center space-y-4">
-                    <p className="text-destructive">Failed to load PDF.</p>
-                    <Button onClick={() => fileInputRef.current?.click()}>Try another file</Button>
-                  </div>
-                </div>
+                {pdfState !== 'loaded' && renderContent()}
                 <div className="w-full h-full" style={{ display: pdfState === 'loaded' ? 'block' : 'none' }}>
                    <PdfViewer pdfDoc={activeDoc?.doc || null} scale={zoomLevel} />
                 </div>
@@ -623,5 +662,4 @@ export default function ReadPage() {
         </div>
       </TooltipProvider>
     );
-
-    
+}

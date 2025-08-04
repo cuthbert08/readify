@@ -19,13 +19,23 @@ export async function POST(req: NextRequest) {
     const hashedPassword = await bcrypt.hash(password, 10);
     const userId = randomUUID();
 
+    // The first user to sign up is an admin, or if their email matches the ADMIN_EMAIL env var
+    const userKeys = await kv.keys('user:*');
+    const isFirstUser = userKeys.length === 0;
+    const isAdmin = isFirstUser || email === process.env.ADMIN_EMAIL;
+
     const user = {
       id: userId,
       email,
       password: hashedPassword,
+      isAdmin,
+      createdAt: Date.now(),
     };
 
     await kv.set(`user:${email}`, JSON.stringify(user));
+
+    // Also store user by ID for easier retrieval
+    await kv.set(`user-by-id:${userId}`, JSON.stringify({id: userId, email, isAdmin, createdAt: user.createdAt}));
 
     return NextResponse.json({ message: 'User created successfully' }, { status: 201 });
   } catch (error) {
