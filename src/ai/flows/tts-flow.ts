@@ -9,7 +9,7 @@
 
 import { ai } from '@/ai/genkit';
 import { z } from 'genkit';
-import { openai } from 'genkitx-openai';
+import { openAI } from 'genkitx-openai';
 
 const GenerateSpeechInputSchema = z.object({
   text: z.string().describe('The text to be converted to speech.'),
@@ -32,7 +32,7 @@ const ttsFlow = ai.defineFlow(
   },
   async (input) => {
     const { media } = await ai.generate({
-      model: openai.model('tts-1'),
+      model: openAI.model('tts-1'),
       prompt: input.text,
       config: {
         voice: input.voice as any,
