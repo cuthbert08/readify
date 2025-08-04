@@ -16,7 +16,7 @@ import { getAvailableVoices, AvailableVoicesOutput } from '@/ai/flows/voice-sele
 import { generateSpeech, previewSpeech } from '@/ai/flows/tts-flow';
 import { summarizePdf, SummarizePdfOutput } from '@/ai/flows/summarize-pdf';
 import { chatWithPdf, ChatWithPdfOutput } from '@/ai/flows/chat-with-pdf';
-import { Sidebar, SidebarProvider, SidebarTrigger, SidebarContent, SidebarHeader, SidebarMenu, SidebarMenuItem, SidebarMenuButton, SidebarFooter, useSidebar, SidebarGroup } from '@/components/ui/sidebar';
+import { Sidebar, SidebarHeader, SidebarMenu, SidebarMenuItem, SidebarMenuButton, SidebarFooter, SidebarContent } from '@/components/ui/sidebar';
 import { getDocuments, saveDocument, Document } from '@/lib/db';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import AiDialog, { AiDialogType } from '@/components/ai-dialog';
@@ -34,7 +34,7 @@ type ActiveDocument = {
   audioUrl?: string | null;
 };
 
-const ReaderView = () => {
+export default function ReadPage() {
     const [pdfState, setPdfState] = useState<PdfState>('idle');
     const [activeDoc, setActiveDoc] = useState<ActiveDocument | null>(null);
     
@@ -72,8 +72,6 @@ const ReaderView = () => {
     const viewerContainerRef = useRef<HTMLDivElement>(null);
     const controlsTimeoutRef = useRef<NodeJS.Timeout | null>(null);
     const router = useRouter();
-    const { isMobile } = useSidebar();
-
 
     const fetchUserDocuments = useCallback(async () => {
       try {
@@ -427,7 +425,6 @@ const ReaderView = () => {
             <SidebarHeader>
                <div className="flex items-center justify-between">
                   <h1 className="text-2xl font-headline text-primary">Readify</h1>
-                  <SidebarTrigger />
                </div>
             </SidebarHeader>
             <SidebarContent>
@@ -439,7 +436,7 @@ const ReaderView = () => {
                   </SidebarMenuButton>
                 </SidebarMenuItem>
                 <Separator className="my-2" />
-                 <SidebarGroup>
+                 <div>
                   <div className="p-2 text-sm font-semibold flex items-center gap-2 text-muted-foreground">
                     <Bot />
                     AI Tools
@@ -456,14 +453,14 @@ const ReaderView = () => {
                         Ask a Question
                       </SidebarMenuButton>
                    </SidebarMenuItem>
-                 </SidebarGroup>
+                 </div>
                 <Separator className="my-2" />
-                <SidebarGroup>
+                <div>
                    <div className="p-2 text-sm font-semibold flex items-center gap-2 text-muted-foreground">
                     <Library />
                     My Documents
                    </div>
-                </SidebarGroup>
+                </div>
                   {userDocuments.map((doc) => (
                      <SidebarMenuItem key={doc.id}>
                         <SidebarMenuButton variant="ghost" onClick={() => handleSelectDocument(doc)} isActive={activeDoc?.id === doc.id}>
@@ -495,12 +492,9 @@ const ReaderView = () => {
           </Sidebar>
           
           <div className="flex flex-1 flex-col" ref={viewerContainerRef}>
-              <div className="relative flex-1 flex">
-                 <div className="absolute top-4 left-4 z-50">
-                    <SidebarTrigger />
-                 </div>
+              <div className="relative flex-1 flex flex-col">
                  {pdfState === 'loaded' && (
-                   <div className={cn("absolute inset-x-0 top-0 z-50 transition-opacity duration-300", showControls ? 'opacity-100' : 'opacity-0 pointer-events-none')}>
+                   <div className={cn("absolute inset-x-0 top-0 z-10 transition-opacity duration-300", showControls ? 'opacity-100' : 'opacity-0 pointer-events-none')}>
                      <PdfToolbar
                        fileName={fileName}
                        zoomLevel={zoomLevel}
@@ -521,7 +515,7 @@ const ReaderView = () => {
                    {renderContent()}
                  </main>
                  {pdfState === 'loaded' && (
-                   <div className={cn("absolute inset-x-0 bottom-0 z-50 transition-opacity duration-300", showControls ? 'opacity-100' : 'opacity-0 pointer-events-none')}>
+                   <div className={cn("absolute inset-x-0 bottom-0 z-10 transition-opacity duration-300", showControls ? 'opacity-100' : 'opacity-0 pointer-events-none')}>
                        <AudioPlayer
                            isSpeaking={isSpeaking}
                            isGeneratingSpeech={isGeneratingSpeech}
@@ -548,13 +542,4 @@ const ReaderView = () => {
           />
         </div>
     );
-}
-
-
-export default function ReadPage() {
-    return (
-        <SidebarProvider>
-            <ReaderView />
-        </SidebarProvider>
-    )
 }

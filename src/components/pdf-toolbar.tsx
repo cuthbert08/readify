@@ -3,7 +3,6 @@ import React from 'react';
 import { Button } from './ui/button';
 import { ZoomIn, ZoomOut, Minimize, Maximize, Save, Download, Loader2 } from 'lucide-react';
 import { Separator } from './ui/separator';
-import { SidebarTrigger } from './ui/sidebar';
 
 type PdfToolbarProps = {
   fileName: string;
@@ -38,7 +37,6 @@ const PdfToolbar: React.FC<PdfToolbarProps> = ({
     <div className="p-2">
        <div className="flex items-center justify-between gap-2 p-2 rounded-md bg-card/90 text-card-foreground shadow-lg backdrop-blur-sm max-w-4xl mx-auto">
         <div className="flex items-center gap-2">
-            <SidebarTrigger className="md:hidden" />
             <h2 className="text-lg font-semibold truncate max-w-xs md:max-w-md">{fileName || 'Readify'}</h2>
         </div>
         <div className="flex items-center gap-2">
