@@ -15,10 +15,11 @@ import { getAvailableVoices, AvailableVoicesOutput } from '@/ai/flows/voice-sele
 import { generateSpeech, previewSpeech } from '@/ai/flows/tts-flow';
 import { summarizePdf, SummarizePdfOutput } from '@/ai/flows/summarize-pdf';
 import { chatWithPdf, ChatWithPdfOutput } from '@/ai/flows/chat-with-pdf';
-import { Sidebar, SidebarProvider, SidebarTrigger, SidebarContent, SidebarHeader, SidebarMenu, SidebarMenuItem, SidebarMenuButton, SidebarFooter, SidebarRail } from '@/components/ui/sidebar';
+import { Sidebar, SidebarProvider, SidebarTrigger, SidebarContent, SidebarHeader, SidebarMenu, SidebarMenuItem, SidebarMenuButton, SidebarFooter, SidebarRail, SidebarGroup } from '@/components/ui/sidebar';
 import { getDocuments, saveDocument, Document } from '@/lib/db';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import AiDialog, { AiDialogType } from '@/components/ai-dialog';
+import { Separator } from '@/components/ui/separator';
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.mjs`;
 
@@ -401,6 +402,26 @@ export default function ReadPage() {
                   Upload New PDF
                 </SidebarMenuButton>
               </SidebarMenuItem>
+              <Separator className="my-2" />
+               <SidebarGroup>
+                <div className="p-2 text-sm font-semibold flex items-center gap-2 text-muted-foreground">
+                  <Bot />
+                  AI Tools
+                </div>
+                 <SidebarMenuItem>
+                    <SidebarMenuButton onClick={() => handleAiAction('summary')} disabled={pdfState !== 'loaded'}>
+                      <Lightbulb />
+                      Summarize & Key Points
+                    </SidebarMenuButton>
+                 </SidebarMenuItem>
+                 <SidebarMenuItem>
+                    <SidebarMenuButton onClick={() => handleAiAction('chat')} disabled={pdfState !== 'loaded'}>
+                      <HelpCircle />
+                      Ask a Question
+                    </SidebarMenuButton>
+                 </SidebarMenuItem>
+               </SidebarGroup>
+              <Separator className="my-2" />
               <SidebarMenuItem>
                  <div className="p-2 text-sm font-semibold flex items-center gap-2 text-muted-foreground">
                   <Library />
@@ -436,7 +457,11 @@ export default function ReadPage() {
             </div>
           </SidebarFooter>
         </Sidebar>
-        <SidebarRail />
+        <div className="md:flex hidden">
+           <SidebarRail />
+           <SidebarTrigger className="my-2" />
+        </div>
+
 
         <div className="flex-1 flex flex-col" ref={viewerRef}>
             <header className="flex items-center justify-between p-2 border-b bg-card print:hidden">
@@ -447,14 +472,6 @@ export default function ReadPage() {
               <div className="flex items-center gap-2">
                 {pdfState === 'loaded' && (
                   <>
-                    <Button variant="outline" onClick={() => handleAiAction('summary')}>
-                      <Bot className="mr-2" />
-                      Summarize &amp; Key Points
-                    </Button>
-                     <Button variant="outline" onClick={() => handleAiAction('chat')}>
-                      <HelpCircle className="mr-2" />
-                      Ask a Question
-                    </Button>
                     <PdfToolbar
                         zoomLevel={zoomLevel}
                         onZoomIn={() => setZoomLevel(z => Math.min(z + 0.2, 3))}
