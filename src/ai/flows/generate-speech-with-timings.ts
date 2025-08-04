@@ -17,29 +17,30 @@ export const generateSpeechWithTimingsFlow = ai.defineFlow(
     name: 'generateSpeechWithTimingsFlow',
     inputSchema: GenerateSpeechWithTimingsInputSchema,
     outputSchema: GenerateSpeechWithTimingsOutputSchema,
+    stream: GenerateSpeechWithTimingsOutputSchema,
   },
-  async (input) => {
+  async (input, stream) => {
     
     if (!input.text || !input.text.trim()) {
         throw new Error("Input text cannot be empty.");
     }
 
     // Generate speech from the text using OpenAI, requesting word-level timestamps
-    const { media, content } = await ai.generate({
+    const { media, content, finishReason } = await ai.generate({
       model: 'openai/tts-1-hd',
       prompt: input.text,
       config: {
         voice: input.voice,
         speed: input.speakingRate || 1.0,
         response_format: 'mp3',
-        timestamp_granularities: ['word'],
       },
       output: {
-        format: 'url'
+        format: 'url',
+        jsonData: true, // We want the JSON data for timestamps
       }
     });
 
-    if (!media || !media.url) {
+    if (finishReason !== 'stop' || !media?.url || !content) {
         throw new Error('No media URL returned from OpenAI. Check OpenAI API response.');
     }
 
@@ -59,10 +60,15 @@ export const generateSpeechWithTimingsFlow = ai.defineFlow(
         const base64Audio = Buffer.from(audioBuffer).toString('base64');
         const audioDataUri = `data:audio/mp3;base64,${base64Audio}`;
 
-        return {
+        const result: z.infer<typeof GenerateSpeechWithTimingsOutputSchema> = {
             audioDataUri: audioDataUri,
             words: timingData.words,
         };
+
+        // Stream the final result chunk
+        stream.chunk(result);
+
+        return result;
 
     } catch (fetchError: any) {
         console.error("Error fetching or processing audio from OpenAI URL:", fetchError);
@@ -70,10 +76,3 @@ export const generateSpeechWithTimingsFlow = ai.defineFlow(
     }
   }
 );
-
-
-export async function generateSpeechWithTimings(
-  input: z.infer<typeof GenerateSpeechWithTimingsInputSchema>
-): Promise<z.infer<typeof GenerateSpeechWithTimingsOutputSchema>> {
-  return generateSpeechWithTimingsFlow(input);
-}

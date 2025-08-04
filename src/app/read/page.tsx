@@ -12,7 +12,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { getAvailableVoices, AvailableVoicesOutput } from '@/ai/flows/voice-selection';
-import { generateSpeechWithTimings } from '@/ai/flows/generate-speech-with-timings';
+import { generateSpeechWithTimingsFlow } from '@/ai/flows/generate-speech-with-timings';
 import { previewSpeech } from '@/ai/flows/preview-speech';
 import { summarizePdf, SummarizePdfOutput } from '@/ai/flows/summarize-pdf';
 import { chatWithPdf, ChatWithPdfOutput } from '@/ai/flows/chat-with-pdf';
@@ -37,6 +37,7 @@ import TextSelectionMenu from '@/components/text-selection-menu';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Textarea } from '@/components/ui/textarea';
 import { Card } from '@/components/ui/card';
+import { generateSpeechWithTimings } from '@/ai/flows/generate-speech-with-timings';
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
   'pdfjs-dist/build/pdf.worker.min.mjs',
@@ -388,7 +389,7 @@ export default function ReadPage() {
         }
         
         setProcessingStage('generating');
-        const flow = generateSpeechWithTimings({ 
+        const flow = generateSpeechWithTimingsFlow({ 
             text: cleanedText, 
             voice: selectedVoice as any,
             speakingRate: speakingRate,
@@ -509,7 +510,7 @@ export default function ReadPage() {
                 text: synthesisText,
                 voice: synthesisVoice as any,
                 speakingRate: synthesisRate
-            }).result();
+            });
             if (result.audioDataUri) {
                 setSynthesisAudioUrl(result.audioDataUri);
             }
