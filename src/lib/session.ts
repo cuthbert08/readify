@@ -19,8 +19,9 @@ export async function decrypt(input: string): Promise<any> {
       algorithms: ['HS256'],
     });
     return payload;
-  } catch (e) {
-    // console.error('JWT Decryption Error:', e);
+  } catch (e: any) {
+    // Log specific error for debugging, e.g., "JWTExpired", "JWSSignatureVerificationFailed"
+    console.error('JWT Decryption Error:', e?.code || e?.message);
     return null;
   }
 }
