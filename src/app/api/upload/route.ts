@@ -8,17 +8,22 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ message: 'Unauthorized' }, { status: 401 });
   }
 
-  const { filename } = await request.json();
-  const blobName = `${session.userId}/${filename}`;
+  const filename = request.headers.get('x-vercel-filename');
+  if (!filename) {
+    return NextResponse.json(
+      { message: 'Filename is missing' },
+      { status: 400 }
+    );
+  }
 
-  // The Vercel Blob SDK needs the request body as a readable stream
-  // when used in a Node.js environment. We'll pass `request.body` directly.
   if (!request.body) {
     return NextResponse.json(
       { message: 'Request body is missing' },
       { status: 400 }
     );
   }
+  
+  const blobName = `${session.userId}/${filename}`;
 
   try {
     const blob = await put(blobName, request.body, {

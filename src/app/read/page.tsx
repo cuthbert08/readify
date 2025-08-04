@@ -149,30 +149,17 @@ export default function ReadPage() {
        const response = await fetch('/api/upload', {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json',
+          'Content-Type': 'application/pdf',
+          'x-vercel-filename': file.name
         },
-        body: JSON.stringify({
-          filename: file.name,
-        }),
+        body: file,
       });
 
       if (!response.ok) {
         throw new Error('Failed to get pre-signed URL.');
       }
 
-      const { url, downloadUrl } = await response.json();
-
-      const uploadResponse = await fetch(url, {
-        method: 'PUT',
-        body: file,
-        headers: {
-          'Content-Type': file.type,
-        },
-      });
-
-      if (!uploadResponse.ok) {
-        throw new Error('Upload failed.');
-      }
+      const { downloadUrl } = await response.json();
 
       setPdfUrl(downloadUrl);
       await loadPdfFromUrl(downloadUrl);
