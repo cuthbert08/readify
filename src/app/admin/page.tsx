@@ -50,7 +50,7 @@ export default function AdminPage() {
       toast({
         variant: 'destructive',
         title: 'Error',
-        description: 'Failed to fetch admin data.',
+        description: error instanceof Error ? error.message : 'Failed to fetch admin data.',
       });
     } finally {
       setIsLoading(false);
@@ -71,7 +71,7 @@ export default function AdminPage() {
         toast({
           variant: 'destructive',
           title: 'Error',
-          description: 'Failed to delete user.',
+          description: error instanceof Error ? error.message : 'Failed to delete user.',
         });
       }
     }
