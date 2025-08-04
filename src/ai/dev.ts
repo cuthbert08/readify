@@ -9,3 +9,4 @@ import '@/ai/flows/chat-with-pdf.ts';
 import '@/ai/flows/glossary-flow.ts';
 import '@/ai/flows/explain-text-flow.ts';
 import '@/ai/flows/quiz-flow.ts';
+import '@/ai/flows/clean-text-flow.ts';

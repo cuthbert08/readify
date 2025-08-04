@@ -25,7 +25,7 @@ export const generateSpeech = ai.defineFlow(
       config: {
         voice: input.voice,
         speed: input.speakingRate || 1.0,
-        response_format: 'wav',
+        response_format: 'mp3',
       },
       output: {
         format: 'url'
@@ -45,7 +45,7 @@ export const generateSpeech = ai.defineFlow(
 
         const audioBuffer = await audioResponse.arrayBuffer();
         const base64Audio = Buffer.from(audioBuffer).toString('base64');
-        const audioDataUri = `data:audio/wav;base64,${base64Audio}`;
+        const audioDataUri = `data:audio/mp3;base64,${base64Audio}`;
 
         return {
             audioDataUri: audioDataUri,

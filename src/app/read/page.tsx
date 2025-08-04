@@ -4,7 +4,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import * as pdfjsLib from 'pdfjs-dist';
 import type { PDFDocumentProxy } from 'pdfjs-dist/types/src/display/api';
-import { UploadCloud, FileText, Loader2, LogOut, Save, Library, Download, Bot, Lightbulb, HelpCircle, Cloud, CloudOff, Settings, Menu, Home, BarChart, BookOpenCheck, BrainCircuit } from 'lucide-react';
+import { UploadCloud, FileText, Loader2, LogOut, Save, Library, Download, Bot, Lightbulb, HelpCircle, Cloud, CloudOff, Settings, Menu, Home, BarChart, BookOpenCheck, BrainCircuit, Mic } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import PdfViewer, { TextItem } from '@/components/pdf-viewer';
 import AudioPlayer from '@/components/audio-player';
@@ -19,6 +19,7 @@ import { chatWithPdf, ChatWithPdfOutput } from '@/ai/flows/chat-with-pdf';
 import { generateGlossary, GenerateGlossaryOutput, GlossaryItem } from '@/ai/flows/glossary-flow';
 import { explainText, ExplainTextOutput } from '@/ai/flows/explain-text-flow';
 import { generateQuiz, type GenerateQuizOutput } from '@/ai/flows/quiz-flow';
+import { cleanPdfText } from '@/ai/flows/clean-text-flow';
 import { Sidebar, SidebarHeader, SidebarMenu, SidebarMenuItem, SidebarMenuButton, SidebarFooter, SidebarContent } from '@/components/ui/sidebar';
 import { getDocuments, saveDocument, Document, getUserSession } from '@/lib/db';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -33,6 +34,9 @@ import { Volume2 } from 'lucide-react';
 import { useMediaQuery } from '@/hooks/use-media-query';
 import type { Sentence } from '@/ai/schemas';
 import TextSelectionMenu from '@/components/text-selection-menu';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Textarea } from '@/components/ui/textarea';
+import { Card } from '@/components/ui/card';
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
   'pdfjs-dist/build/pdf.worker.min.mjs',
@@ -52,7 +56,6 @@ type ActiveDocument = {
 const WORDS_PER_MINUTE = 150;
 
 function estimateSentences(text: string, rate: number): Sentence[] {
-    // Basic sentence splitting
     const sentenceEndings = /(?<!\w\.\w.)(?<![A-Z][a-z]\.)(?<=\.|\?|!)\s/g;
     const sentenceStrings = text.replace(/\s+/g, ' ').trim().split(sentenceEndings);
     
@@ -118,6 +121,14 @@ export default function ReadPage() {
     
     const [selection, setSelection] = useState<{ text: string; page: number, rect: DOMRect } | null>(null);
     const [isDragging, setIsDragging] = useState(false);
+    
+    // State for Text-to-Audio tab
+    const [synthesisText, setSynthesisText] = useState('');
+    const [synthesisVoice, setSynthesisVoice] = useState('alloy');
+    const [synthesisRate, setSynthesisRate] = useState(1.0);
+    const [isSynthesizing, setIsSynthesizing] = useState(false);
+    const [synthesisAudioUrl, setSynthesisAudioUrl] = useState<string | null>(null);
+    const synthesisAudioRef = useRef<HTMLAudioElement | null>(null);
 
     const { toast } = useToast();
     const fileInputRef = useRef<HTMLInputElement>(null);
@@ -309,7 +320,6 @@ export default function ReadPage() {
         try {
           let pdfUrl = activeDoc.url;
     
-          // If the doc is from a local file, upload it first
           if (activeDoc.file) {
             const uploadResponse = await fetch('/api/upload', {
               method: 'POST',
@@ -379,11 +389,16 @@ export default function ReadPage() {
   
       try {
         setIsGeneratingSpeech(true);
+        toast({ title: "Cleaning up text...", description: "AI is removing headers and footers." });
+        
+        const { cleanedText } = await cleanPdfText({ rawText: documentText });
 
-        const sentences = estimateSentences(documentText, speakingRate);
+        toast({ title: "Generating audio...", description: "This may take a moment." });
+
+        const sentences = estimateSentences(cleanedText, speakingRate);
 
         const result = await generateSpeech({ 
-            text: documentText, 
+            text: cleanedText, 
             voice: selectedVoice as any,
             speakingRate: speakingRate,
         });
@@ -397,7 +412,6 @@ export default function ReadPage() {
         
         setIsGeneratingSpeech(false);
         
-        // Auto-save after successful generation
         await handleSaveAfterAudio(result.audioDataUri, sentences);
 
         if (audioRef.current) {
@@ -449,6 +463,30 @@ export default function ReadPage() {
         toast({ variant: "destructive", title: "Audio Error", description: `Could not preview voice: ${errorMessage}` });
       }
     }
+
+    const handleSynthesize = async () => {
+        if (!synthesisText.trim()) {
+            toast({ variant: "destructive", title: "No Text", description: "Please enter some text to synthesize." });
+            return;
+        }
+        setIsSynthesizing(true);
+        setSynthesisAudioUrl(null);
+        try {
+            const result = await generateSpeech({
+                text: synthesisText,
+                voice: synthesisVoice as any,
+                speakingRate: synthesisRate
+            });
+            if (result.audioDataUri) {
+                setSynthesisAudioUrl(result.audioDataUri);
+            }
+        } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : "An unknown error occurred";
+            toast({ variant: "destructive", title: "Synthesis Error", description: `Could not generate audio: ${errorMessage}` });
+        } finally {
+            setIsSynthesizing(false);
+        }
+    };
 
     useEffect(() => {
         if(audioRef.current) {
@@ -588,27 +626,87 @@ export default function ReadPage() {
         case 'idle':
         default:
           return (
-            <div 
-              className={cn(
-                "flex flex-col items-center justify-center h-full text-center space-y-4 p-8 border-2 border-dashed rounded-2xl cursor-pointer transition-colors duration-300",
-                isDragging ? "border-primary bg-primary/10" : "border-primary/50 hover:bg-primary/5"
-              )}
-              onClick={() => fileInputRef.current?.click()}
-              onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); setIsDragging(true); }}
-              onDragLeave={(e) => { e.preventDefault(); e.stopPropagation(); setIsDragging(false); }}
-              onDrop={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                setIsDragging(false);
-                if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-                  handleFileDrop(e.dataTransfer.files[0]);
-                }
-              }}
-            >
-              <UploadCloud className="w-16 h-16 text-primary" />
-              <h2 className="text-2xl font-headline">Upload your PDF</h2>
-              <p className="text-muted-foreground">Click or drag & drop a PDF file to start reading</p>
-            </div>
+             <Tabs defaultValue="upload" className="w-full max-w-3xl mx-auto mt-20">
+                <TabsList className="grid w-full grid-cols-2">
+                    <TabsTrigger value="upload">Upload PDF</TabsTrigger>
+                    <TabsTrigger value="synthesize">Synthesize Speech</TabsTrigger>
+                </TabsList>
+                <TabsContent value="upload">
+                    <div 
+                        className={cn(
+                            "flex flex-col items-center justify-center h-full text-center space-y-4 p-8 border-2 border-dashed rounded-2xl cursor-pointer transition-colors duration-300 mt-4",
+                            isDragging ? "border-primary bg-primary/10" : "border-primary/50 hover:bg-primary/5"
+                        )}
+                        onClick={() => fileInputRef.current?.click()}
+                        onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); setIsDragging(true); }}
+                        onDragLeave={(e) => { e.preventDefault(); e.stopPropagation(); setIsDragging(false); }}
+                        onDrop={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            setIsDragging(false);
+                            if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+                            handleFileDrop(e.dataTransfer.files[0]);
+                            }
+                        }}
+                        >
+                        <UploadCloud className="w-16 h-16 text-primary" />
+                        <h2 className="text-2xl font-headline">Read a Document</h2>
+                        <p className="text-muted-foreground">Click or drag & drop a PDF file to start reading</p>
+                    </div>
+                </TabsContent>
+                <TabsContent value="synthesize">
+                    <Card className="p-6 mt-4">
+                        <div className="space-y-4">
+                            <h2 className="text-2xl font-headline">Text-to-Audio</h2>
+                            <p className="text-muted-foreground">Paste text below to generate audio and download it as an MP3 file.</p>
+                            <Textarea 
+                                placeholder="Paste your text here..." 
+                                className="min-h-48"
+                                value={synthesisText}
+                                onChange={(e) => setSynthesisText(e.target.value)}
+                            />
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div className='space-y-2'>
+                                    <Label>Voice</Label>
+                                    <Select value={synthesisVoice} onValueChange={setSynthesisVoice} disabled={isSynthesizing}>
+                                        <SelectTrigger>
+                                            <SelectValue placeholder="Select a voice" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            {availableVoices.map((voice) => (
+                                            <SelectItem key={voice.name} value={voice.name}>
+                                                {voice.displayName} ({voice.gender})
+                                            </SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                                <div className='space-y-2'>
+                                    <Label htmlFor="synthesis-rate">Speaking Rate: {synthesisRate.toFixed(2)}x</Label>
+                                    <Slider id="synthesis-rate" min={0.25} max={4.0} step={0.25} value={[synthesisRate]} onValueChange={(v) => setSynthesisRate(v[0])} disabled={isSynthesizing} />
+                                </div>
+                            </div>
+                            <Button onClick={handleSynthesize} disabled={isSynthesizing || !synthesisText.trim()}>
+                                {isSynthesizing ? <Loader2 className="mr-2 animate-spin"/> : <Mic className="mr-2"/>}
+                                {isSynthesizing ? 'Generating Audio...' : 'Generate Audio'}
+                            </Button>
+
+                            {synthesisAudioUrl && (
+                                <div className="space-y-2">
+                                    <Label>Generated Audio</Label>
+                                    <audio ref={synthesisAudioRef} src={synthesisAudioUrl} controls className="w-full" />
+                                     <a href={synthesisAudioUrl} download="synthesis.mp3">
+                                        <Button variant="outline" className="w-full">
+                                            <Download className="mr-2" />
+                                            Download MP3
+                                        </Button>
+                                    </a>
+                                </div>
+                            )}
+                        </div>
+                    </Card>
+                </TabsContent>
+            </Tabs>
           );
       }
     }
@@ -715,63 +813,61 @@ export default function ReadPage() {
                       <Library />
                       My Documents
                     </div>
-                </div>
-                 {activeDoc && !activeDoc.id && (
-                  <SidebarMenuItem>
-                      <div className={cn(
-                        "flex w-full items-center gap-2 overflow-hidden rounded-md p-2 text-left text-sm",
-                        "bg-sidebar-accent font-medium text-sidebar-accent-foreground"
-                      )}>
-                      <FileText />
-                      <div className="flex-1 flex items-center justify-between">
-                         <Tooltip>
-                            <TooltipTrigger asChild>
-                                <span className="truncate max-w-[150px]">{fileName}</span>
-                            </TooltipTrigger>
-                            <TooltipContent><p>{fileName}</p></TooltipContent>
-                         </Tooltip>
-                         <Tooltip>
-                            <TooltipTrigger asChild>
-                                 <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => isGeneratingSpeech || handlePlayPause()} disabled={isSaving || isGeneratingSpeech}>
-                                    {isSaving || isGeneratingSpeech ? <Loader2 className="h-4 w-4 animate-spin"/> : <CloudOff className="h-4 w-4 text-destructive" />}
-                                </Button>
-                            </TooltipTrigger>
-                            <TooltipContent>
-                                <p>Not saved. Generate audio to save to cloud.</p>
-                            </TooltipContent>
-                        </Tooltip>
-                      </div>
-                      </div>
-                  </SidebarMenuItem>
-                )}
-                  {userDocuments.map((doc) => (
-                      <SidebarMenuItem key={doc.id}>
-                        <div className={cn(
-                          "flex w-full items-center gap-2 overflow-hidden rounded-md p-2 text-left text-sm",
-                          activeDoc?.id === doc.id && "bg-sidebar-accent font-medium text-sidebar-accent-foreground"
-                        )}>
-                            <FileText />
-                            <div className="flex-1 flex items-center justify-between">
-                              <Tooltip>
+                     <div className="px-2">
+                        {activeDoc && !activeDoc.id && (
+                          <div className={cn(
+                            "flex w-full items-center gap-2 overflow-hidden rounded-md p-2 text-left text-sm",
+                            "bg-sidebar-accent font-medium text-sidebar-accent-foreground mb-1"
+                          )}>
+                          <FileText />
+                          <div className="flex-1 flex items-center justify-between">
+                             <Tooltip>
                                 <TooltipTrigger asChild>
-                                    <button onClick={() => handleSelectDocument(doc)} className="truncate max-w-[150px] text-left hover:underline">
-                                        {doc.fileName}
-                                    </button>
+                                    <span className="truncate max-w-[150px]">{fileName}</span>
                                 </TooltipTrigger>
-                                <TooltipContent><p>{doc.fileName}</p></TooltipContent>
-                              </Tooltip>
-                              <Tooltip>
+                                <TooltipContent><p>{fileName}</p></TooltipContent>
+                             </Tooltip>
+                             <Tooltip>
                                 <TooltipTrigger asChild>
-                                  <Cloud className="h-4 w-4 text-primary" />
+                                     <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => isGeneratingSpeech || handlePlayPause()} disabled={isSaving || isGeneratingSpeech}>
+                                        {isSaving || isGeneratingSpeech ? <Loader2 className="h-4 w-4 animate-spin"/> : <CloudOff className="h-4 w-4 text-destructive" />}
+                                    </Button>
                                 </TooltipTrigger>
                                 <TooltipContent>
-                                    <p>Saved to cloud</p>
+                                    <p>Not saved. Generate audio to save to cloud.</p>
                                 </TooltipContent>
                             </Tooltip>
-                            </div>
-                        </div>
-                      </SidebarMenuItem>
-                  ))}
+                          </div>
+                          </div>
+                        )}
+                        {userDocuments.map((doc) => (
+                          <div key={doc.id} className={cn(
+                              "flex w-full items-center gap-2 overflow-hidden rounded-md p-2 text-left text-sm mb-1",
+                              activeDoc?.id === doc.id && "bg-sidebar-accent font-medium text-sidebar-accent-foreground"
+                          )}>
+                              <FileText />
+                              <div className="flex-1 flex items-center justify-between">
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                      <button onClick={() => handleSelectDocument(doc)} className="truncate max-w-[150px] text-left hover:underline">
+                                          {doc.fileName}
+                                      </button>
+                                  </TooltipTrigger>
+                                  <TooltipContent><p>{doc.fileName}</p></TooltipContent>
+                                </Tooltip>
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <Cloud className="h-4 w-4 text-primary" />
+                                  </TooltipTrigger>
+                                  <TooltipContent>
+                                      <p>Saved to cloud</p>
+                                  </TooltipContent>
+                              </Tooltip>
+                              </div>
+                          </div>
+                        ))}
+                    </div>
+                </div>
               </SidebarMenu>
             </SidebarContent>
             <SidebarFooter>
@@ -841,7 +937,7 @@ export default function ReadPage() {
                         onPlaybackRateChange={setPlaybackRate}
                         showDownload={!!generatedAudioUrl}
                         downloadUrl={generatedAudioUrl || ''}
-                        downloadFileName={`${fileName || 'audio'}.wav`}
+                        downloadFileName={`${fileName || 'audio'}.mp3`}
                         progress={audioProgress}
                         duration={audioDuration}
                         currentTime={audioCurrentTime}
