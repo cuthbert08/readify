@@ -395,18 +395,18 @@ export default function ReadPage() {
           throw new Error('Audio generation failed to return data.');
         }
 
-        setProcessingStage('syncing');
+        if (audioRef.current) {
+            audioRef.current.src = result.audioDataUri;
+            audioRef.current.play();
+            setIsSpeaking(true);
+        }
+
         setGeneratedAudioUrl(result.audioDataUri);
         setActiveDoc(prev => prev ? { ...prev, audioUrl: result.audioDataUri, words: result.words } : null);
-        
+
+        setProcessingStage('syncing');
         await handleSaveAfterAudio(result.audioDataUri, result.words);
         setProcessingStage('idle');
-
-        if (audioRef.current) {
-          audioRef.current.src = result.audioDataUri;
-          audioRef.current.play();
-          setIsSpeaking(true);
-        }
 
       } catch (error) {
         console.error('Speech generation error', error);
@@ -577,7 +577,7 @@ export default function ReadPage() {
     }, []);
   
     useEffect(() => {
-      if (activeDoc?.id && !isSaving) {
+      if (activeDoc?.id && !isSaving && processingStage === 'idle') {
         const timer = setTimeout(() => {
           saveDocument({
             id: activeDoc.id,
@@ -590,7 +590,7 @@ export default function ReadPage() {
         }, 2000); 
         return () => clearTimeout(timer);
       }
-    }, [activeDoc, fileName, isSaving, zoomLevel]);
+    }, [activeDoc, fileName, isSaving, zoomLevel, processingStage]);
 
     const handleTextSelect = (text: string, page: number, rect: DOMRect) => {
         setSelection({text, page, rect});
@@ -600,7 +600,7 @@ export default function ReadPage() {
         switch (processingStage) {
             case 'cleaning': return 'AI is cleaning the document text...';
             case 'generating': return 'Generating audio, this may take a moment...';
-            case 'syncing': return 'Finalizing audio and text sync...';
+            case 'syncing': return 'Finalizing audio and saving...';
             case 'error': return 'An error occurred during audio generation.';
             default: return '';
         }
@@ -936,7 +936,7 @@ export default function ReadPage() {
                         onZoomOut={() => setZoomLevel(z => Math.max(z - 0.2, 0.4))}
                         playbackRate={playbackRate}
                         onPlaybackRateChange={setPlaybackRate}
-                        showDownload={!!generatedAudioUrl}
+                        showDownload={!!generatedAudioUrl && processingStage === 'idle'}
                         downloadUrl={generatedAudioUrl || ''}
                         downloadFileName={`${fileName || 'audio'}.mp3`}
                         progress={audioProgress}

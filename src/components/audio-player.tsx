@@ -69,32 +69,34 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
   return (
     <div className="p-2 md:p-4 w-full">
       <Card className="max-w-xl mx-auto p-3 shadow-2xl bg-card/90 backdrop-blur-sm">
-        {isGeneratingSpeech ? (
-             <div className="flex items-center justify-center gap-2 h-16">
-                <Loader2 className="h-5 w-5 animate-spin" />
-                <span className="text-sm font-medium text-muted-foreground">{processingMessage}</span>
-            </div>
-        ) : (
-            <div className="flex items-center justify-between gap-4">
-                <Button variant="ghost" size="icon" onClick={onRewind} disabled={!showDownload}>
-                    <Rewind />
-                    <span className="sr-only">Rewind 10s</span>
-                </Button>
-                <Button 
-                    onClick={onPlayPause} 
-                    size="lg" 
-                    className="rounded-full w-16 h-16 bg-primary hover:bg-primary/90 text-primary-foreground"
-                    aria-label={isSpeaking ? 'Pause' : 'Play'}
-                    disabled={isGeneratingSpeech || !canPlay}
-                >
-                    {isSpeaking ? <Pause className="h-8 w-8" /> : <Play className="h-8 w-8" />}
-                </Button>
-                <Button variant="ghost" size="icon" onClick={onForward} disabled={!showDownload}>
-                    <FastForward />
-                    <span className="sr-only">Forward 10s</span>
-                </Button>
-            </div>
-        )}
+        <div className='h-16 flex items-center justify-center'>
+            {isGeneratingSpeech ? (
+                <div className="flex items-center justify-center gap-2">
+                    <Loader2 className="h-5 w-5 animate-spin" />
+                    <span className="text-sm font-medium text-muted-foreground">{processingMessage}</span>
+                </div>
+            ) : (
+                <div className="flex items-center justify-between gap-4 w-full">
+                    <Button variant="ghost" size="icon" onClick={onRewind} disabled={!generatedAudioUrl}>
+                        <Rewind />
+                        <span className="sr-only">Rewind 10s</span>
+                    </Button>
+                    <Button 
+                        onClick={onPlayPause} 
+                        size="lg" 
+                        className="rounded-full w-16 h-16 bg-primary hover:bg-primary/90 text-primary-foreground"
+                        aria-label={isSpeaking ? 'Pause' : 'Play'}
+                        disabled={isGeneratingSpeech || !canPlay}
+                    >
+                        {isSpeaking ? <Pause className="h-8 w-8" /> : <Play className="h-8 w-8" />}
+                    </Button>
+                    <Button variant="ghost" size="icon" onClick={onForward} disabled={!generatedAudioUrl}>
+                        <FastForward />
+                        <span className="sr-only">Forward 10s</span>
+                    </Button>
+                </div>
+            )}
+        </div>
         <div className="flex items-center gap-2 mt-2">
             <span className="text-xs font-mono">{formatTime(currentTime)}</span>
             <Slider
@@ -102,7 +104,7 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
                 max={duration}
                 step={1}
                 onValueChange={(value) => onSeek(value[0])}
-                disabled={!showDownload}
+                disabled={!generatedAudioUrl}
                 className="w-full"
             />
             <span className="text-xs font-mono">{formatTime(duration)}</span>
@@ -122,7 +124,7 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
             </Button>
             <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" size="sm">
+                  <Button variant="ghost" size="sm" disabled={!generatedAudioUrl}>
                      <Wind />
                      <span className="sr-only">Playback Speed</span>
                   </Button>
