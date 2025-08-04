@@ -4,9 +4,9 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import * as pdfjsLib from 'pdfjs-dist';
 import type { PDFDocumentProxy } from 'pdfjs-dist/types/src/display/api';
-import { UploadCloud, FileText, Loader2, LogOut, Save, Library, Download, Bot, Lightbulb, HelpCircle, Cloud, CloudOff, Settings, Menu, Home, BarChart } from 'lucide-react';
+import { UploadCloud, FileText, Loader2, LogOut, Save, Library, Download, Bot, Lightbulb, HelpCircle, Cloud, CloudOff, Settings, Menu, Home, BarChart, BookOpenCheck } from 'lucide-react';
 import { useRouter } from 'next/navigation';
-import PdfViewer from '@/components/pdf-viewer';
+import PdfViewer, { TextItem } from '@/components/pdf-viewer';
 import AudioPlayer from '@/components/audio-player';
 import { useToast } from "@/hooks/use-toast";
 import { Button } from '@/components/ui/button';
@@ -16,6 +16,8 @@ import { generateSpeech } from '@/ai/flows/tts-flow';
 import { previewSpeech } from '@/ai/flows/preview-speech';
 import { summarizePdf, SummarizePdfOutput } from '@/ai/flows/summarize-pdf';
 import { chatWithPdf, ChatWithPdfOutput } from '@/ai/flows/chat-with-pdf';
+import { generateGlossary, GenerateGlossaryOutput, GlossaryItem } from '@/ai/flows/glossary-flow';
+import { explainText, ExplainTextOutput } from '@/ai/flows/explain-text-flow';
 import { Sidebar, SidebarHeader, SidebarMenu, SidebarMenuItem, SidebarMenuButton, SidebarFooter, SidebarContent } from '@/components/ui/sidebar';
 import { getDocuments, saveDocument, Document, getUserSession } from '@/lib/db';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -28,6 +30,8 @@ import { Label } from '@/components/ui/label';
 import { Slider } from '@/components/ui/slider';
 import { Volume2 } from 'lucide-react';
 import { useMediaQuery } from '@/hooks/use-media-query';
+import type { Sentence } from '@/ai/schemas';
+import TextSelectionMenu from '@/components/text-selection-menu';
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
   'pdfjs-dist/build/pdf.worker.min.mjs',
@@ -41,6 +45,7 @@ type ActiveDocument = {
   doc: PDFDocumentProxy | null;
   url: string | null;
   audioUrl?: string | null;
+  sentences?: Sentence[] | null;
 };
 
 export default function ReadPage() {
@@ -48,14 +53,13 @@ export default function ReadPage() {
     const [activeDoc, setActiveDoc] = useState<ActiveDocument | null>(null);
     
     const [fileName, setFileName] = useState<string>('');
-    const [totalPages, setTotalPages] = useState(0);
-    const [currentPage, setCurrentPage] = useState(1);
     const [loadingProgress, setLoadingProgress] = useState(0);
     const [zoomLevel, setZoomLevel] = useState(1);
     const [isSaving, setIsSaving] = useState(false);
     const [isFullScreen, setIsFullScreen] = useState(false);
   
     const [documentText, setDocumentText] = useState('');
+    const [allTextItems, setAllTextItems] = useState<TextItem[]>([]);
   
     const [isSpeaking, setIsSpeaking] = useState(false);
     const [isGeneratingSpeech, setIsGeneratingSpeech] = useState(false);
@@ -63,9 +67,10 @@ export default function ReadPage() {
     const [audioProgress, setAudioProgress] = useState(0);
     const [audioDuration, setAudioDuration] = useState(0);
     const [audioCurrentTime, setAudioCurrentTime] = useState(0);
+    const [currentSentence, setCurrentSentence] = useState<Sentence | null>(null);
   
     const [availableVoices, setAvailableVoices] = useState<AvailableVoicesOutput>([]);
-    const [selectedVoice, setSelectedVoice] = useState<string>('alloy');
+    const [selectedVoice, setSelectedVoice] = useState<string>('text-to-speech-en-US-Standard-A');
     const [speakingRate, setSpeakingRate] = useState(1);
     const [playbackRate, setPlaybackRate] = useState(1);
     
@@ -76,9 +81,13 @@ export default function ReadPage() {
     const [aiIsLoading, setAiIsLoading] = useState(false);
     const [aiSummaryOutput, setAiSummaryOutput] = useState<SummarizePdfOutput | null>(null);
     const [aiChatOutput, setAiChatOutput] = useState<ChatWithPdfOutput | null>(null);
+    const [aiGlossaryOutput, setAiGlossaryOutput] = useState<GenerateGlossaryOutput | null>(null);
+    const [aiExplanationOutput, setAiExplanationOutput] = useState<ExplainTextOutput | null>(null);
     
     const [showControls, setShowControls] = useState(true);
     const [isAdmin, setIsAdmin] = useState(false);
+    
+    const [selection, setSelection] = useState<{ text: string; page: number, rect: DOMRect } | null>(null);
 
     const { toast } = useToast();
     const fileInputRef = useRef<HTMLInputElement>(null);
@@ -118,9 +127,6 @@ export default function ReadPage() {
         try {
           const voices = await getAvailableVoices();
           setAvailableVoices(voices);
-          if (activeDoc?.audioUrl) {
-              setGeneratedAudioUrl(activeDoc.audioUrl);
-          }
         } catch (error) {
           toast({
             variant: "destructive",
@@ -130,7 +136,7 @@ export default function ReadPage() {
         }
       }
       fetchVoices();
-    }, [toast, fetchUserDocuments, activeDoc]);
+    }, [toast, fetchUserDocuments]);
 
     const handleHideControls = () => {
         if(controlsTimeoutRef.current) {
@@ -161,16 +167,15 @@ export default function ReadPage() {
       router.push('/');
     };
   
-    const loadPdf = useCallback(async (source: File | string, docId: string | null = null, audioUrl: string | null = null) => {
+    const loadPdf = useCallback(async (source: File | string, docId: string | null = null, savedData: Partial<Document> | null = null) => {
       setPdfState('loading');
       setLoadingProgress(0);
       setActiveDoc(null);
       setDocumentText('');
+      setAllTextItems([]);
       setAiSummaryOutput(null);
       setAiChatOutput(null);
       setGeneratedAudioUrl(null);
-      setTotalPages(0);
-      setCurrentPage(1);
   
       try {
         const loadingTask = pdfjsLib.getDocument(typeof source === 'string' ? { url: source } : { data: await source.arrayBuffer() });
@@ -178,27 +183,46 @@ export default function ReadPage() {
           if (total) setLoadingProgress((loaded / total) * 100);
         };
         const pdf = await loadingTask.promise;
-        setTotalPages(pdf.numPages);
         
-        const allText: string[] = [];
-        for(let i = 1; i <= pdf.numPages; i++) {
+        const textItemsByPage: TextItem[][] = [];
+        let fullText = '';
+        for (let i = 1; i <= pdf.numPages; i++) {
           const page = await pdf.getPage(i);
           const content = await page.getTextContent();
-          const pageText = content.items.map(item => (item as any).str).join(' ');
-          allText.push(pageText);
+          const items = content.items.map(item => {
+            const textItem = item as any; // Cast to access properties
+            const tx = pdfjsLib.Util.transform(
+              page.view,
+              textItem.transform
+            );
+    
+            return {
+              text: textItem.str,
+              transform: textItem.transform,
+              width: textItem.width,
+              height: textItem.height,
+              pageNumber: i,
+            };
+          });
+          textItemsByPage.push(items);
+          fullText += items.map(item => item.text).join(' ');
         }
-        setDocumentText(allText.join('\n\n'));
+        setAllTextItems(textItemsByPage.flat());
+        setDocumentText(fullText);
   
-        setActiveDoc({
+        const docToLoad: ActiveDocument = {
           id: docId,
           file: typeof source === 'string' ? null : source,
           doc: pdf,
           url: typeof source === 'string' ? source : null,
-          audioUrl: audioUrl,
-        });
+          audioUrl: savedData?.audioUrl,
+          sentences: savedData?.sentences as Sentence[] || null,
+        };
+
+        setActiveDoc(docToLoad);
   
-        if(audioUrl) {
-          setGeneratedAudioUrl(audioUrl);
+        if (savedData?.audioUrl) {
+          setGeneratedAudioUrl(savedData.audioUrl);
         }
         
         setPdfState('loaded');
@@ -231,11 +255,11 @@ export default function ReadPage() {
     const handleSelectDocument = async (doc: Document) => {
       setFileName(doc.fileName);
       setZoomLevel(doc.zoomLevel || 1);
-      await loadPdf(doc.pdfUrl, doc.id, doc.audioUrl);
+      await loadPdf(doc.pdfUrl, doc.id, doc);
     }
   
     const handleSave = async () => {
-        if (!activeDoc) return;
+        if (!activeDoc || !activeDoc.doc) return;
     
         if (!activeDoc.file && !activeDoc.id) {
           toast({ variant: "destructive", title: "Save Error", description: "No document data to save." });
@@ -269,15 +293,14 @@ export default function ReadPage() {
             id: activeDoc.id || undefined, 
             fileName: fileName,
             pdfUrl: pdfUrl,
-            currentPage: currentPage,
-            totalPages: totalPages,
             zoomLevel: zoomLevel,
             audioUrl: generatedAudioUrl,
+            sentences: activeDoc.sentences || null,
           };
     
           const savedDoc = await saveDocument(docToSave);
     
-          setActiveDoc(prev => prev ? { ...prev, id: savedDoc.id, file: null, url: savedDoc.pdfUrl, audioUrl: savedDoc.audioUrl } : null);
+          setActiveDoc(prev => prev ? { ...prev, id: savedDoc.id, file: null, url: savedDoc.pdfUrl, audioUrl: savedDoc.audioUrl, sentences: savedDoc.sentences } : null);
         
           await fetchUserDocuments(); 
     
@@ -325,7 +348,7 @@ export default function ReadPage() {
   
         if (result.audioDataUri && audioRef.current) {
           setGeneratedAudioUrl(result.audioDataUri);
-          setActiveDoc(prev => prev ? { ...prev, audioUrl: result.audioDataUri } : null);
+          setActiveDoc(prev => prev ? { ...prev, audioUrl: result.audioDataUri, sentences: result.sentences } : null);
           audioRef.current.src = result.audioDataUri;
           audioRef.current.play();
           setIsSpeaking(true);
@@ -340,6 +363,21 @@ export default function ReadPage() {
         toast({ variant: "destructive", title: "Audio Error", description: `Could not generate audio for the document. ${errorMessage}` });
       }
     };
+
+    const handleAudioTimeUpdate = () => {
+        if (!audioRef.current || !activeDoc?.sentences) {
+            setCurrentSentence(null);
+            return;
+        }
+        const currentTime = audioRef.current.currentTime;
+        const sentence = activeDoc.sentences.find(s => currentTime >= s.startTime && currentTime < s.endTime);
+        setCurrentSentence(sentence || null);
+
+        setAudioCurrentTime(currentTime);
+        if (audioDuration > 0) {
+            setAudioProgress((currentTime / audioDuration) * 100);
+        }
+    }
   
     const handlePreviewVoice = async (voice: string) => {
       try {
@@ -381,22 +419,32 @@ export default function ReadPage() {
       }
     };
   
-    const handleAiAction = async (type: AiDialogType) => {
-      if (!documentText) return;
+    const handleAiAction = async (type: AiDialogType, data?: any) => {
       setAiDialogType(type);
       setIsAiDialogOpen(true);
       setAiIsLoading(true);
+      setAiChatOutput(null);
+      setAiSummaryOutput(null);
+      setAiGlossaryOutput(null);
+      setAiExplanationOutput(null);
   
-      if (type === 'summary' || type === 'key-points') {
-        try {
+      try {
+        if ((type === 'summary' || type === 'key-points') && documentText) {
           const result = await summarizePdf({ pdfText: documentText });
           setAiSummaryOutput(result);
-        } catch (error) {
-          console.error('AI Summary Error:', error);
-          toast({ variant: "destructive", title: "AI Error", description: "Could not generate summary or key points." });
+        } else if (type === 'glossary' && documentText) {
+            const result = await generateGlossary({ documentText: documentText });
+            setAiGlossaryOutput(result);
+        } else if (type === 'explain' && data?.text) {
+            const result = await explainText({ text: data.text, context: documentText });
+            setAiExplanationOutput(result);
         }
+      } catch (error) {
+        console.error(`AI Error (${type}):`, error);
+        toast({ variant: "destructive", title: "AI Error", description: `Could not perform AI action: ${type}.` });
+      } finally {
+        setAiIsLoading(false);
       }
-      setAiIsLoading(false);
     };
   
     const handleAiChat = async (question: string) => {
@@ -445,15 +493,18 @@ export default function ReadPage() {
             id: activeDoc.id,
             fileName: fileName,
             pdfUrl: activeDoc.url || '',
-            currentPage: currentPage,
-            totalPages: totalPages,
             zoomLevel: zoomLevel,
             audioUrl: activeDoc.audioUrl,
+            sentences: activeDoc.sentences,
           }).catch(err => console.error("Failed to auto-save progress", err));
         }, 2000); 
         return () => clearTimeout(timer);
       }
-    }, [currentPage, activeDoc, fileName, totalPages, isSaving, zoomLevel]);
+    }, [activeDoc, fileName, isSaving, zoomLevel]);
+
+    const handleTextSelect = (text: string, page: number, rect: DOMRect) => {
+        setSelection({text, page, rect});
+    }
 
     const renderContent = () => {
       switch (pdfState) {
@@ -529,7 +580,7 @@ export default function ReadPage() {
                                     {availableVoices.map((voice) => (
                                     <div key={voice.name} className="flex items-center justify-between pr-2">
                                         <SelectItem value={voice.name} className="flex-1">
-                                            {voice.name} ({voice.gender})
+                                            {voice.name.replace('text-to-speech-en-US-Standard-', '')} ({voice.gender})
                                         </SelectItem>
                                         <Button 
                                             variant="ghost" 
@@ -550,7 +601,7 @@ export default function ReadPage() {
                         </div>
                         <div className='space-y-2'>
                             <Label htmlFor="speaking-rate">Speaking Rate: {speakingRate.toFixed(2)}x</Label>
-                            <Slider id="speaking-rate" min={0.25} max={3.0} step={0.25} value={[speakingRate]} onValueChange={(v) => setSpeakingRate(v[0])} disabled={isSpeaking || isGeneratingSpeech} />
+                            <Slider id="speaking-rate" min={0.25} max={4.0} step={0.25} value={[speakingRate]} onValueChange={(v) => setSpeakingRate(v[0])} disabled={isSpeaking || isGeneratingSpeech} />
                         </div>
                     </div>
                   </div>
@@ -565,6 +616,12 @@ export default function ReadPage() {
                       <SidebarMenuButton onClick={() => handleAiAction('summary')} disabled={pdfState !== 'loaded'}>
                         <Lightbulb />
                         Summarize & Key Points
+                      </SidebarMenuButton>
+                    </SidebarMenuItem>
+                    <SidebarMenuItem>
+                      <SidebarMenuButton onClick={() => handleAiAction('glossary')} disabled={pdfState !== 'loaded'}>
+                        <BookOpenCheck />
+                        Create Glossary
                       </SidebarMenuButton>
                     </SidebarMenuItem>
                     <SidebarMenuItem>
@@ -656,11 +713,25 @@ export default function ReadPage() {
             </SidebarFooter>
           </Sidebar>
           
-          <div className="flex-1 flex flex-col relative" ref={viewerContainerRef}>
+          <div className="flex-1 flex flex-col relative" ref={viewerContainerRef} onMouseUp={() => selection && setSelection(null)}>
             <main className="flex-1 flex items-center justify-center overflow-auto bg-muted/30">
                 {pdfState !== 'loaded' && renderContent()}
-                <div className="w-full h-full" style={{ display: pdfState === 'loaded' ? 'block' : 'none' }}>
-                   <PdfViewer pdfDoc={activeDoc?.doc || null} scale={zoomLevel} />
+                <div className="w-full h-full relative" style={{ display: pdfState === 'loaded' ? 'block' : 'none' }}>
+                   <PdfViewer 
+                        pdfDoc={activeDoc?.doc || null} 
+                        scale={zoomLevel} 
+                        allTextItems={allTextItems}
+                        highlightSentence={currentSentence}
+                        onTextSelect={handleTextSelect}
+                    />
+                     {selection && viewerContainerRef.current && (
+                        <TextSelectionMenu 
+                            bounds={viewerContainerRef.current.getBoundingClientRect()}
+                            selection={selection}
+                            onExplain={() => handleAiAction('explain', {text: selection.text})}
+                            onClose={() => setSelection(null)}
+                        />
+                    )}
                 </div>
             </main>
             {pdfState === 'loaded' && (
@@ -695,10 +766,7 @@ export default function ReadPage() {
             ref={audioRef} 
             onEnded={() => setIsSpeaking(false)} 
             onLoadedMetadata={(e) => setAudioDuration(e.currentTarget.duration)}
-            onTimeUpdate={(e) => {
-              setAudioCurrentTime(e.currentTarget.currentTime);
-              setAudioProgress((e.currentTarget.currentTime / audioDuration) * 100);
-            }}
+            onTimeUpdate={handleAudioTimeUpdate}
             hidden 
           />
           <audio ref={previewAudioRef} hidden />
@@ -709,6 +777,8 @@ export default function ReadPage() {
             isLoading={aiIsLoading}
             summaryOutput={aiSummaryOutput}
             chatOutput={aiChatOutput}
+            glossaryOutput={aiGlossaryOutput}
+            explanationOutput={aiExplanationOutput}
             onChatSubmit={handleAiChat}
           />
         </div>

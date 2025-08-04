@@ -3,6 +3,7 @@
 import { kv } from '@vercel/kv';
 import { getSession } from './session';
 import { randomUUID } from 'crypto';
+import type { Sentence } from '@/ai/schemas';
 
 export interface Document {
   id: string;
@@ -10,8 +11,7 @@ export interface Document {
   fileName: string;
   pdfUrl: string;
   audioUrl: string | null;
-  currentPage: number;
-  totalPages: number;
+  sentences: Sentence[] | null;
   zoomLevel: number;
   createdAt: number;
 }
@@ -33,9 +33,8 @@ export async function saveDocument(docData: {
   id?: string;
   fileName: string;
   pdfUrl: string;
-  currentPage: number;
-  totalPages: number;
   audioUrl?: string | null;
+  sentences?: Sentence[] | null;
   zoomLevel?: number;
 }): Promise<Document> {
   const session = await getSession();
@@ -48,16 +47,21 @@ export async function saveDocument(docData: {
 
   if (docId) {
     // Update existing document
-    const existingDoc = await kv.get<Document>(`doc:${docId}`);
-    if (!existingDoc || existingDoc.userId !== userId) {
-      throw new Error('Document not found or access denied.');
+    const existingDocRaw = await kv.get(`doc:${docId}`);
+    if (!existingDocRaw) {
+        throw new Error('Document not found.');
+    }
+    const existingDoc = existingDocRaw as Document;
+    
+    if (existingDoc.userId !== userId) {
+      throw new Error('Access denied.');
     }
     const updatedDoc: Document = {
       ...existingDoc,
       ...docData,
-      audioUrl: docData.audioUrl || existingDoc.audioUrl,
-      zoomLevel: docData.zoomLevel || existingDoc.zoomLevel,
-      currentPage: docData.currentPage || existingDoc.currentPage,
+      audioUrl: docData.audioUrl !== undefined ? docData.audioUrl : existingDoc.audioUrl,
+      sentences: docData.sentences !== undefined ? docData.sentences : existingDoc.sentences,
+      zoomLevel: docData.zoomLevel !== undefined ? docData.zoomLevel : existingDoc.zoomLevel,
     };
     await kv.set(`doc:${docId}`, updatedDoc);
     return updatedDoc;
@@ -71,8 +75,7 @@ export async function saveDocument(docData: {
       fileName: docData.fileName,
       pdfUrl: docData.pdfUrl,
       audioUrl: docData.audioUrl || null,
-      currentPage: docData.currentPage,
-      totalPages: docData.totalPages,
+      sentences: docData.sentences || null,
       zoomLevel: docData.zoomLevel || 1,
       createdAt: Date.now(),
     };

@@ -15,9 +15,12 @@ import { Input } from '@/components/ui/input';
 import { Loader2, Send } from 'lucide-react';
 import type { SummarizePdfOutput } from '@/ai/flows/summarize-pdf';
 import type { ChatWithPdfOutput } from '@/ai/flows/chat-with-pdf';
+import type { GenerateGlossaryOutput } from '@/ai/flows/glossary-flow';
+import type { ExplainTextOutput } from '@/ai/flows/explain-text-flow';
 import { ScrollArea } from './ui/scroll-area';
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from './ui/accordion';
 
-export type AiDialogType = 'summary' | 'key-points' | 'chat';
+export type AiDialogType = 'summary' | 'key-points' | 'chat' | 'glossary' | 'explain';
 
 type AiDialogProps = {
   open: boolean;
@@ -26,6 +29,8 @@ type AiDialogProps = {
   isLoading: boolean;
   summaryOutput: SummarizePdfOutput | null;
   chatOutput: ChatWithPdfOutput | null;
+  glossaryOutput: GenerateGlossaryOutput | null;
+  explanationOutput: ExplainTextOutput | null;
   onChatSubmit: (question: string) => void;
 };
 
@@ -36,6 +41,8 @@ const AiDialog: React.FC<AiDialogProps> = ({
   isLoading,
   summaryOutput,
   chatOutput,
+  glossaryOutput,
+  explanationOutput,
   onChatSubmit,
 }) => {
   const [question, setQuestion] = useState('');
@@ -47,6 +54,13 @@ const AiDialog: React.FC<AiDialogProps> = ({
       setQuestion('');
     }
   };
+
+  const renderLoading = (text: string) => (
+    <div className="flex items-center justify-center space-x-2 h-full">
+      <Loader2 className="animate-spin" />
+      <span>{text}</span>
+    </div>
+  )
 
   const renderSummaryContent = () => (
     <>
@@ -64,12 +78,7 @@ const AiDialog: React.FC<AiDialogProps> = ({
         <ScrollArea className="h-96">
           <TabsContent value="summary" className="p-4">
             <h3 className="text-lg font-semibold mb-2">Summary</h3>
-            {isLoading ? (
-              <div className="flex items-center justify-center space-x-2">
-                <Loader2 className="animate-spin" />
-                <span>Generating summary...</span>
-              </div>
-            ) : (
+            {isLoading ? renderLoading('Generating summary...') : (
               <p className="text-sm text-muted-foreground whitespace-pre-wrap">
                 {summaryOutput?.summary || 'No summary available.'}
               </p>
@@ -77,12 +86,7 @@ const AiDialog: React.FC<AiDialogProps> = ({
           </TabsContent>
           <TabsContent value="key-points" className="p-4">
             <h3 className="text-lg font-semibold mb-2">Key Points</h3>
-            {isLoading ? (
-              <div className="flex items-center justify-center space-x-2">
-                <Loader2 className="animate-spin" />
-                <span>Extracting key points...</span>
-              </div>
-            ) : (
+            {isLoading ? renderLoading('Extracting key points...') : (
               <ul className="list-disc pl-5 space-y-2 text-sm text-muted-foreground">
                 {summaryOutput?.keyPoints?.map((point, index) => (
                   <li key={index}>{point}</li>
@@ -92,6 +96,45 @@ const AiDialog: React.FC<AiDialogProps> = ({
           </TabsContent>
         </ScrollArea>
       </Tabs>
+    </>
+  );
+
+  const renderGlossaryContent = () => (
+    <>
+        <DialogHeader>
+            <DialogTitle>Glossary</DialogTitle>
+            <DialogDescription>Key terms and concepts identified from the document by the AI.</DialogDescription>
+        </DialogHeader>
+        <ScrollArea className="h-96 pr-4">
+            {isLoading ? renderLoading('Creating glossary...') : (
+                 <Accordion type="single" collapsible className="w-full">
+                    {glossaryOutput?.glossary?.map((item, index) => (
+                        <AccordionItem value={`item-${index}`} key={index}>
+                            <AccordionTrigger>{item.term}</AccordionTrigger>
+                            <AccordionContent>
+                                {item.definition}
+                            </AccordionContent>
+                        </AccordionItem>
+                    ))}
+                </Accordion>
+            )}
+        </ScrollArea>
+    </>
+  );
+  
+  const renderExplanationContent = () => (
+    <>
+        <DialogHeader>
+            <DialogTitle>Explanation</DialogTitle>
+            <DialogDescription>Here is a simplified explanation of the selected text.</DialogDescription>
+        </DialogHeader>
+        <ScrollArea className="h-auto max-h-96 pr-4 mt-4">
+            {isLoading ? renderLoading('Thinking...') : (
+                <p className="text-sm text-muted-foreground whitespace-pre-wrap">
+                    {explanationOutput?.explanation || 'No explanation available.'}
+                </p>
+            )}
+        </ScrollArea>
     </>
   );
 
@@ -105,12 +148,7 @@ const AiDialog: React.FC<AiDialogProps> = ({
       </DialogHeader>
       <ScrollArea className="flex-1 my-4">
          <div className="p-4 space-y-4">
-            {isLoading ? (
-                 <div className="flex items-center justify-center space-x-2">
-                    <Loader2 className="animate-spin" />
-                    <span>Thinking...</span>
-                 </div>
-            ) : (
+            {isLoading ? renderLoading('Thinking...') : (
                 chatOutput && (
                     <div className="p-3 rounded-md bg-muted">
                         <p className="text-sm">{chatOutput.answer}</p>
@@ -135,10 +173,26 @@ const AiDialog: React.FC<AiDialogProps> = ({
     </div>
   );
 
+  const renderContent = () => {
+    switch (type) {
+        case 'summary':
+        case 'key-points':
+            return renderSummaryContent();
+        case 'glossary':
+            return renderGlossaryContent();
+        case 'explain':
+            return renderExplanationContent();
+        case 'chat':
+            return renderChatContent();
+        default:
+            return null;
+    }
+  }
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl">
-        {type === 'chat' ? renderChatContent() : renderSummaryContent()}
+        {renderContent()}
       </DialogContent>
     </Dialog>
   );

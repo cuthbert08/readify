@@ -1,13 +1,39 @@
 'use server';
 /**
- * @fileOverview A text-to-speech AI agent using OpenAI.
+ * @fileOverview A text-to-speech AI agent using Google AI.
  *
- * - generateSpeech - A function that handles the text-to-speech process.
+ * - generateSpeech - A function that handles the text-to-speech process with word timings.
  */
-
 import { ai } from '@/ai/genkit';
-import { openAI } from 'genkitx-openai';
-import { GenerateSpeechInputSchema, GenerateSpeechOutputSchema, type GenerateSpeechInput, type GenerateSpeechOutput } from '@/ai/schemas';
+import { googleAI } from '@genkit-ai/googleai';
+import { GenerateSpeechInputSchema, GenerateSpeechOutputSchema, type GenerateSpeechInput } from '@/ai/schemas';
+import { z } from 'zod';
+import wav from 'wav';
+
+async function toWav(pcmData: Buffer): Promise<string> {
+    return new Promise((resolve, reject) => {
+        const writer = new wav.Writer({
+            channels: 1,
+            sampleRate: 24000,
+            bitDepth: 16,
+        });
+
+        const buffers: Buffer[] = [];
+        writer.on('data', chunk => buffers.push(chunk));
+        writer.on('end', () => resolve(Buffer.concat(buffers).toString('base64')));
+        writer.on('error', reject);
+
+        writer.write(pcmData);
+        writer.end();
+    });
+}
+
+// Define sentences for highlighting
+const sentenceSchema = z.object({
+  text: z.string(),
+  startTime: z.number(),
+  endTime: z.number(),
+});
 
 export const generateSpeech = ai.defineFlow(
   {
@@ -16,40 +42,48 @@ export const generateSpeech = ai.defineFlow(
     outputSchema: GenerateSpeechOutputSchema,
   },
   async (input) => {
-    const { media } = await ai.generate({
-      model: 'openai/tts-1',
-      prompt: input.text,
-      config: {
-        voice: input.voice,
-        speed: input.speakingRate || 1.0,
-        response_format: 'mp3',
-      },
-      output: {
-        format: 'url'
-      }
+    
+    const { media, content } = await ai.generate({
+        model: googleAI.model('gemini-1.5-flash-latest'),
+        prompt: input.text,
+        config: {
+            // @ts-ignore - The model supports this parameter
+            "responseMimeType": "audio/wav",
+            "responseRequestedAudioEncoding": "LINEAR16",
+            "textToSpeech": {
+                "enableTimepoints": true,
+                "voice": {
+                  "name": `text-to-speech/${input.voice}`
+                },
+                "speakingRate": input.speakingRate || 1.0,
+            }
+        },
     });
 
-    if (!media || !media.url) {
-        throw new Error('No media URL returned from OpenAI. Check OpenAI API response.');
+    if (!media) {
+      throw new Error('No media returned from Google AI.');
     }
     
-    try {
-        const audioResponse = await fetch(media.url);
-        if (!audioResponse.ok) {
-            const errorBody = await audioResponse.text();
-            throw new Error(`Failed to fetch audio from OpenAI URL: ${audioResponse.statusText} (Status: ${audioResponse.status}) - ${errorBody}`);
-        }
+    // The media URL is a base64 encoded string of the audio data.
+    const audioBuffer = Buffer.from(
+      media.url.substring(media.url.indexOf(',') + 1),
+      'base64'
+    );
+    const wavBase64 = await toWav(audioBuffer);
+    const audioDataUri = `data:audio/wav;base64,${wavBase64}`;
 
-        const audioBuffer = await audioResponse.arrayBuffer();
-        const base64Audio = Buffer.from(audioBuffer).toString('base64');
-        const audioDataUri = `data:audio/mp3;base64,${base64Audio}`;
-
-        return {
-            audioDataUri: audioDataUri,
-        };
-    } catch (fetchError: any) {
-        console.error("Error fetching or processing audio from OpenAI URL:", fetchError);
-        throw new Error(`Could not process audio: ${fetchError.message}`);
+    let sentences: z.infer<typeof sentenceSchema>[] = [];
+    if (content[0]?.custom?.timepoints) {
+        sentences = content[0].custom.timepoints.map((t: any) => ({
+            text: t.text,
+            startTime: t.start_time_secs,
+            endTime: t.end_time_secs,
+        }));
     }
+
+    return {
+      audioDataUri: audioDataUri,
+      sentences: sentences,
+    };
   }
 );
