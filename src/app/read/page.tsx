@@ -314,7 +314,8 @@ export default function ReadPage() {
         console.error('Speech generation error', error);
         setIsGeneratingSpeech(false);
         setIsSpeaking(false);
-        toast({ variant: "destructive", title: "Audio Error", description: "Could not generate audio for the document." });
+        const errorMessage = error instanceof Error ? error.message : "An unknown error occurred";
+        toast({ variant: "destructive", title: "Audio Error", description: `Could not generate audio for the document. ${errorMessage}` });
       }
     };
   
@@ -328,7 +329,8 @@ export default function ReadPage() {
           previewAudioRef.current.play();
         }
       } catch (error) {
-        toast({ variant: "destructive", title: "Audio Error", description: "Could not preview voice." });
+        const errorMessage = error instanceof Error ? error.message : "An unknown error occurred";
+        toast({ variant: "destructive", title: "Audio Error", description: `Could not preview voice: ${errorMessage}` });
       }
     }
 
@@ -656,5 +658,7 @@ export default function ReadPage() {
       </TooltipProvider>
     );
 }
+
+    
 
     
