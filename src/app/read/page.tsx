@@ -375,12 +375,11 @@ export default function ReadPage() {
           return;
       }
   
-      if (!documentText) return;
+      if (!documentText || !activeDoc) return;
   
       try {
         setIsGeneratingSpeech(true);
 
-        // Client-side sentence estimation
         const sentences = estimateSentences(documentText, speakingRate);
 
         const result = await generateSpeech({ 
@@ -388,19 +387,25 @@ export default function ReadPage() {
             voice: selectedVoice as any,
             speakingRate: speakingRate,
         });
+        
+        if (!result.audioDataUri) {
+          throw new Error('Audio generation failed to return data.');
+        }
+
+        setGeneratedAudioUrl(result.audioDataUri);
+        setActiveDoc(prev => prev ? { ...prev, audioUrl: result.audioDataUri, sentences: sentences } : null);
+        
         setIsGeneratingSpeech(false);
-  
-        if (result.audioDataUri && audioRef.current) {
-          setGeneratedAudioUrl(result.audioDataUri);
-          setActiveDoc(prev => prev ? { ...prev, audioUrl: result.audioDataUri, sentences: sentences } : null);
+        
+        // Auto-save after successful generation
+        await handleSaveAfterAudio(result.audioDataUri, sentences);
+
+        if (audioRef.current) {
           audioRef.current.src = result.audioDataUri;
           audioRef.current.play();
           setIsSpeaking(true);
-          // Auto-save after successful generation
-          await handleSaveAfterAudio(result.audioDataUri, sentences);
-        } else {
-          throw new Error('Audio generation failed.');
         }
+
       } catch (error) {
         console.error('Speech generation error', error);
         setIsGeneratingSpeech(false);
