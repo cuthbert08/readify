@@ -88,8 +88,10 @@ export default function ReadPage() {
     
     const [showControls, setShowControls] = useState(true);
     const [isAdmin, setIsAdmin] = useState(false);
+    const [userEmail, setUserEmail] = useState('');
     
     const [selection, setSelection] = useState<{ text: string; page: number, rect: DOMRect } | null>(null);
+    const [isDragging, setIsDragging] = useState(false);
 
     const { toast } = useToast();
     const fileInputRef = useRef<HTMLInputElement>(null);
@@ -102,8 +104,9 @@ export default function ReadPage() {
     useEffect(() => {
       async function checkSession() {
         const session = await getUserSession();
-        if (session?.isAdmin) {
-          setIsAdmin(true);
+        if (session) {
+          setIsAdmin(session.isAdmin || false);
+          setUserEmail(session.email || 'user@example.com');
         }
       }
       checkSession();
@@ -251,6 +254,14 @@ export default function ReadPage() {
         return;
       }
       await loadPdf(file);
+    };
+
+    const handleFileDrop = async (file: File) => {
+        if (!file || file.type !== 'application/pdf') {
+            toast({ variant: "destructive", title: "Invalid File", description: "Please select a PDF file." });
+            return;
+        }
+        await loadPdf(file);
     };
     
     const handleSelectDocument = async (doc: Document) => {
@@ -539,11 +550,25 @@ export default function ReadPage() {
         default:
           return (
             <div 
-              className="flex flex-col items-center justify-center h-full text-center space-y-4 p-8 border-2 border-dashed border-primary/50 rounded-2xl cursor-pointer hover:bg-primary/5 transition-colors duration-300"
-              onClick={() => fileInputRef.current?.click()}>
+              className={cn(
+                "flex flex-col items-center justify-center h-full text-center space-y-4 p-8 border-2 border-dashed rounded-2xl cursor-pointer transition-colors duration-300",
+                isDragging ? "border-primary bg-primary/10" : "border-primary/50 hover:bg-primary/5"
+              )}
+              onClick={() => fileInputRef.current?.click()}
+              onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); setIsDragging(true); }}
+              onDragLeave={(e) => { e.preventDefault(); e.stopPropagation(); setIsDragging(false); }}
+              onDrop={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                setIsDragging(false);
+                if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+                  handleFileDrop(e.dataTransfer.files[0]);
+                }
+              }}
+            >
               <UploadCloud className="w-16 h-16 text-primary" />
               <h2 className="text-2xl font-headline">Upload your PDF</h2>
-              <p className="text-muted-foreground">Click or drag & drop a file to start reading</p>
+              <p className="text-muted-foreground">Click or drag & drop a PDF file to start reading</p>
             </div>
           );
       }
@@ -722,10 +747,10 @@ export default function ReadPage() {
               <div className="flex items-center gap-3 p-2">
                 <Avatar>
                   <AvatarImage data-ai-hint="user avatar" src="https://placehold.co/40x40.png" />
-                  <AvatarFallback>U</AvatarFallback>
+                  <AvatarFallback>{userEmail.charAt(0).toUpperCase()}</AvatarFallback>
                 </Avatar>
                 <div className="flex-1 overflow-hidden">
-                  <p className="text-sm font-medium truncate">User</p>
+                  <p className="text-sm font-medium truncate">{userEmail}</p>
                 </div>
                 <Button onClick={handleLogout} variant="ghost" size="icon">
                     <LogOut className="h-5 w-5"/>
@@ -772,7 +797,7 @@ export default function ReadPage() {
                         onPlaybackRateChange={setPlaybackRate}
                         showDownload={!!generatedAudioUrl}
                         downloadUrl={generatedAudioUrl || ''}
-                        downloadFileName={`${fileName || 'audio'}.mp3`}
+                        downloadFileName={`${fileName || 'audio'}.wav`}
                         progress={audioProgress}
                         duration={audioDuration}
                         currentTime={audioCurrentTime}
@@ -808,3 +833,5 @@ export default function ReadPage() {
       </TooltipProvider>
     );
 }
+
+    

@@ -1,7 +1,8 @@
+
 'use server';
 
 import { kv } from '@vercel/kv';
-import { getSession } from './session';
+import { getSession, type SessionPayload } from './session';
 import { randomUUID } from 'crypto';
 import type { Sentence } from '@/ai/schemas';
 
@@ -25,20 +26,24 @@ export interface User {
     createdAt: string; 
 }
 
-export async function getUserSession() {
+export interface UserSession extends SessionPayload {
+    name: string;
+    email: string;
+}
+
+export async function getUserSession(): Promise<UserSession | null> {
   const session = await getSession();
   if (session?.userId) {
     const user: User | null = await kv.get(`user-by-id:${session.userId}`);
     if (user) {
         return {
-            userId: session.userId,
-            isAdmin: session.isAdmin,
+            ...session,
             name: user.name,
             email: user.email,
         };
     }
   }
-  return session;
+  return null;
 }
 
 
@@ -118,3 +123,5 @@ export async function getDocuments(): Promise<Document[]> {
     .filter((doc): doc is Document => doc !== null)
     .sort((a,b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 }
+
+    

@@ -1,3 +1,4 @@
+
 'use server';
 /**
  * @fileOverview A text-to-speech AI agent using Google Gemini.
@@ -60,20 +61,30 @@ export const generateSpeech = ai.defineFlow(
   },
   async (input) => {
     
+    // Step 1: Clean the text to remove headers and footers
+    const { text: cleanedText } = await ai.generate({
+      prompt: `Please clean the following document text. Remove any repetitive headers, footers, page numbers, and other non-content text. Return only the main body of the text.
+      
+      TEXT:
+      ---
+      ${input.text}
+      ---
+      `,
+      model: 'googleai/gemini-2.0-flash',
+    });
+
+
+    // Step 2: Generate speech from the cleaned text
     const { output } = await ai.generate({
       model: googleAI.model('gemini-2.5-flash-preview-tts'),
-      prompt: input.text,
+      prompt: cleanedText,
       output: { 
           schema: GeminiTtsOutputSchema,
-          // Note: we don't need to provide a custom prompt function here,
-          // Gemini TTS automatically understands to provide audio and timings.
       },
       config: {
         responseModalities: ['AUDIO', 'TEXT'],
         speechConfig: {
           voiceConfig: {
-            // Mapping OpenAI voices to rough Gemini equivalents.
-            // This is a simplification. A more robust solution might use different logic.
             prebuiltVoiceConfig: { voiceName: input.voice === 'nova' || input.voice === 'shimmer' ? 'Alloy' : 'Echo' },
           },
           speakingRate: input.speakingRate || 1.0,
@@ -110,3 +121,5 @@ export const generateSpeech = ai.defineFlow(
     }
   }
 );
+
+    
