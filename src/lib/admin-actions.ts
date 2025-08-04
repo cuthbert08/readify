@@ -13,14 +13,14 @@ export interface Document {
   currentPage: number;
   totalPages: number;
   zoomLevel: number;
-  createdAt: number;
+  createdAt: string; // Changed to string (ISO format)
 }
 
 export interface User {
   id: string;
   email: string;
   isAdmin: boolean;
-  createdAt: number;
+  createdAt: string; // Changed to string (ISO format)
 }
 
 async function checkAdmin() {
@@ -39,44 +39,62 @@ export async function getAllUsers(): Promise<User[]> {
 
   return users
     .filter((u): u is User => u !== null)
-    .sort((a, b) => b.createdAt - a.createdAt);
+    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 }
 
 export async function getAllDocuments(): Promise<Document[]> {
-  await checkAdmin();
-  const docKeys = await kv.keys('doc:*');
-  if (docKeys.length === 0) return [];
-  
-  const docs = await kv.mget<Document[]>(...docKeys);
-  
-  return docs
-    .filter((d): d is Document => d !== null)
-    .sort((a, b) => b.createdAt - a.createdAt);
-}
-
-
-export async function deleteUser(userId: string) {
-  await checkAdmin();
-  
-  const user = await kv.get<User>(`user-by-id:${userId}`);
-  if (!user) throw new Error('User not found');
-
-  if (user.isAdmin) throw new Error('Cannot delete an admin user.');
-
-  const docIds = await kv.lrange(`user:${userId}:docs`, 0, -1);
-  const pipeline = kv.pipeline();
-  
-  if (docIds.length > 0) {
-    const docKeysToDelete = docIds.map(id => `doc:${id}`);
-    // @ts-ignore
-    pipeline.del(...docKeysToDelete);
-  }
-  
-  pipeline.del(`user:${userId}:docs`);
-  pipeline.del(`user-by-id:${userId}`);
-  pipeline.del(`user:${user.email}`);
-
-  await pipeline.exec();
-}
-
+    await checkAdmin();
+    const docKeys = await kv.keys('doc:*');
+    if (docKeys.length === 0) return [];
     
+    const docs = await kv.mget<Document[]>(...docKeys);
+    
+    return docs
+      .filter((d): d is Document => d !== null)
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+}
+
+
+export async function deleteUser(userId: string): Promise<{ success: boolean; message?: string }> {
+  await checkAdmin();
+  
+  try {
+    const user = await kv.get<User>(`user-by-id:${userId}`);
+    if (!user) {
+      throw new Error('User not found');
+    }
+
+    if (user.isAdmin) {
+      throw new Error('Cannot delete an admin user.');
+    }
+
+    // Start a pipeline for atomic operations
+    const pipeline = kv.pipeline();
+
+    // Find and delete all documents associated with the user
+    const docListKey = `user:${userId}:docs`;
+    const docIds = await kv.lrange(docListKey, 0, -1);
+    
+    if (docIds.length > 0) {
+      const docKeysToDelete = docIds.map(id => `doc:${id}`);
+      // @ts-ignore
+      pipeline.del(...docKeysToDelete);
+    }
+    
+    // Delete the user's document list
+    pipeline.del(docListKey);
+    // Delete the user record by ID
+    pipeline.del(`user-by-id:${userId}`);
+    // Delete the user record by email
+    pipeline.del(`user:${user.email}`);
+
+    // Execute all commands in the pipeline
+    await pipeline.exec();
+
+    return { success: true };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'An unknown error occurred';
+    console.error('Failed to delete user:', message);
+    return { success: false, message };
+  }
+}

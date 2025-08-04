@@ -17,30 +17,33 @@ export async function POST(req: NextRequest) {
     if (existingUser) {
       return NextResponse.json({ message: 'User already exists' }, { status: 409 });
     }
+    
+    const adminExists = await kv.get('admin_user_exists');
 
     const hashedPassword = await bcrypt.hash(password, 10);
     const userId = randomUUID();
 
     // The first user to sign up is an admin, or if their email matches the ADMIN_EMAIL env var
-    const userKeys = await kv.keys('user:*');
-    const isFirstUser = userKeys.length === 0;
-    const isAdmin = isFirstUser || email === process.env.ADMIN_EMAIL;
+    const isAdmin = !adminExists || email === process.env.ADMIN_EMAIL;
 
     const user = {
       id: userId,
       email,
       password: hashedPassword,
       isAdmin,
-      createdAt: Date.now(),
+      createdAt: new Date().toISOString(),
     };
     
-    // kv.set automatically stringifies objects
-    await kv.set(`user:${email}`, user);
-    
     const userById = {id: userId, email, isAdmin, createdAt: user.createdAt};
+    
+    const pipeline = kv.pipeline();
+    pipeline.set(`user:${email}`, user);
+    pipeline.set(`user-by-id:${userId}`, userById);
+    if(isAdmin) {
+      pipeline.set('admin_user_exists', true);
+    }
+    await pipeline.exec();
 
-    // Also store user by ID for easier retrieval
-    await kv.set(`user-by-id:${userId}`, userById);
 
     return NextResponse.json({ message: 'User created successfully' }, { status: 201 });
   } catch (error) {

@@ -13,14 +13,14 @@ export interface Document {
   audioUrl: string | null;
   sentences: Sentence[] | null;
   zoomLevel: number;
-  createdAt: number;
+  createdAt: string; // Changed to string for ISO 8601 format
 }
 
 export interface User {
     id: string;
     email: string;
     isAdmin: boolean;
-    createdAt: number;
+    createdAt: string; // Changed to string for ISO 8601 format
 }
 
 // This function is safe to call from client components as it's a server action.
@@ -77,7 +77,7 @@ export async function saveDocument(docData: {
       audioUrl: docData.audioUrl || null,
       sentences: docData.sentences || null,
       zoomLevel: docData.zoomLevel || 1,
-      createdAt: Date.now(),
+      createdAt: new Date().toISOString(),
     };
     await kv.set(`doc:${docId}`, newDoc);
     
@@ -105,5 +105,7 @@ export async function getDocuments(): Promise<Document[]> {
 
   const docs = await kv.mget<Document[]>(...docIds.map(id => `doc:${id}`));
 
-  return docs.filter(doc => doc !== null).sort((a,b) => b.createdAt - a.createdAt);
+  return docs
+    .filter((doc): doc is Document => doc !== null)
+    .sort((a,b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 }

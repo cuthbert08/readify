@@ -8,7 +8,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
-import { getAllUsers, getAllDocuments, deleteUser, User, Document } from '@/lib/admin-actions';
+import { getAllUsers, getAllDocuments, deleteUser } from '@/lib/admin-actions';
+import type { User, Document } from '@/lib/admin-actions';
 import {
   ChartConfig,
   ChartContainer,
@@ -16,7 +17,7 @@ import {
   ChartTooltipContent,
 } from "@/components/ui/chart"
 import { BarChart as RechartsBarChart, Bar, XAxis, YAxis, CartesianGrid } from 'recharts';
-import { format, subDays } from 'date-fns';
+import { format, subDays, parseISO } from 'date-fns';
 
 
 const chartConfig = {
@@ -64,9 +65,13 @@ export default function AdminPage() {
   const handleDeleteUser = async (userId: string) => {
     if (confirm('Are you sure you want to delete this user and all their documents? This action cannot be undone.')) {
       try {
-        await deleteUser(userId);
-        toast({ title: 'Success', description: 'User deleted successfully.' });
-        fetchAdminData(); // Refresh data
+        const result = await deleteUser(userId);
+        if (result.success) {
+            toast({ title: 'Success', description: 'User deleted successfully.' });
+            fetchAdminData(); // Refresh data
+        } else {
+            throw new Error(result.message);
+        }
       } catch (error) {
         toast({
           variant: 'destructive',
@@ -86,13 +91,15 @@ export default function AdminPage() {
   const totalDocuments = documents.length;
 
   const last7Days = Array.from({ length: 7 }, (_, i) => subDays(new Date(), i)).reverse();
+  
   const signupData = last7Days.map(day => ({
       date: format(day, 'MMM d'),
-      users: users.filter(u => format(new Date(u.createdAt), 'yyyy-MM-dd') === format(day, 'yyyy-MM-dd')).length
+      users: users.filter(u => format(parseISO(u.createdAt), 'yyyy-MM-dd') === format(day, 'yyyy-MM-dd')).length
   }));
+
   const uploadData = last7Days.map(day => ({
       date: format(day, 'MMM d'),
-      documents: documents.filter(d => format(new Date(d.createdAt), 'yyyy-MM-dd') === format(day, 'yyyy-MM-dd')).length
+      documents: documents.filter(d => format(parseISO(d.createdAt), 'yyyy-MM-dd') === format(day, 'yyyy-MM-dd')).length
   }));
 
 
