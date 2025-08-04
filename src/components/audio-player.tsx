@@ -1,3 +1,4 @@
+
 'use client';
 
 import React from 'react';
@@ -27,8 +28,8 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
   onPreviewVoice,
 }) => {
   return (
-    <footer className="sticky bottom-0 left-0 right-0 w-full p-2 md:p-4 bg-transparent z-50 print:hidden">
-      <Card className="max-w-3xl mx-auto p-2 md:p-4 shadow-2xl bg-card/95 backdrop-blur-sm">
+    <div className="p-2 md:p-4 w-full">
+      <Card className="max-w-3xl mx-auto p-2 md:p-4 shadow-2xl bg-card/90 backdrop-blur-sm">
         <div className="flex items-center justify-center gap-4">
           <Button 
             onClick={onPlayPause} 
@@ -78,7 +79,7 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
           </div>
         </div>
       </Card>
-    </footer>
+    </div>
   );
 };
 
