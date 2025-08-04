@@ -73,7 +73,7 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
                 size="lg" 
                 className="rounded-full w-16 h-16 bg-primary hover:bg-primary/90 text-primary-foreground"
                 aria-label={isSpeaking ? 'Pause' : 'Play'}
-                disabled={isGeneratingSpeech || (!generatedAudioUrl && !isSpeaking)}
+                disabled={isGeneratingSpeech || (!showDownload && !isSpeaking)}
             >
                 {isGeneratingSpeech ? (
                 <Loader2 className="h-8 w-8 animate-spin" />
