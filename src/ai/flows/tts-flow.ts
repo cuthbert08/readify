@@ -11,9 +11,11 @@ import { ai } from '@/ai/genkit';
 import { z } from 'genkit';
 import { openAI } from 'genkitx-openai';
 
+const validVoices = z.enum(['alloy', 'echo', 'fable', 'onyx', 'nova', 'shimmer']);
+
 const GenerateSpeechInputSchema = z.object({
   text: z.string().describe('The text to be converted to speech.'),
-  voice: z.string().describe('The voice to use for the speech synthesis.'),
+  voice: validVoices.describe('The voice to use for the speech synthesis.'),
   speakingRate: z.number().min(0.25).max(3.0).optional().describe('The speaking rate, where 1.0 is the normal speed.'),
 });
 export type GenerateSpeechInput = z.infer<typeof GenerateSpeechInputSchema>;
@@ -35,9 +37,9 @@ const ttsFlow = ai.defineFlow(
       model: openAI.model('tts-1'),
       prompt: input.text,
       config: {
-        voice: input.voice as any,
+        voice: input.voice,
         speed: input.speakingRate,
-        response_format: 'mp3', // OpenAI TTS returns MP3
+        response_format: 'mp3',
       },
       output: {
         format: 'url' // Get the Base64 data URI
@@ -59,10 +61,10 @@ export async function generateSpeech(input: GenerateSpeechInput): Promise<Genera
   return ttsFlow(input);
 }
 
-export async function previewSpeech(input: Omit<GenerateSpeechInput, 'text'>): Promise<GenerateSpeechOutput> {
+export async function previewSpeech(input: Pick<GenerateSpeechInput, 'voice'>): Promise<GenerateSpeechOutput> {
   return ttsFlow({
-    ...input,
+    voice: input.voice,
     text: "Hello! This is a preview of my voice.",
-    speakingRate: input.speakingRate || 1.0,
+    speakingRate: 1.0,
   });
 }
