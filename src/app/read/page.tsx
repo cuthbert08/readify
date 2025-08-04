@@ -146,28 +146,32 @@ export default function ReadPage() {
     setLoadingProgress(0);
 
     try {
-        const response = await fetch('/api/upload', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ filename: file.name }),
-        });
+      const response = await fetch('/api/upload', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ filename: file.name }),
+      });
 
-        const { url, postUrl } = await response.json();
+      if (!response.ok) {
+        throw new Error('Failed to get pre-signed URL.');
+      }
 
-        const uploadResponse = await fetch(postUrl, {
-            method: 'PUT',
-            body: file,
-            headers: {
-                'Content-Type': 'application/pdf',
-            },
-        });
-        
-        if (!uploadResponse.ok) {
-            throw new Error('Upload failed.');
-        }
+      const { url, downloadUrl } = await response.json();
 
-        setPdfUrl(url);
-        await loadPdfFromUrl(url);
+      const uploadResponse = await fetch(url, {
+        method: 'PUT',
+        body: file,
+        headers: {
+          'Content-Type': 'application/pdf',
+        },
+      });
+
+      if (!uploadResponse.ok) {
+        throw new Error('Upload failed.');
+      }
+
+      setPdfUrl(downloadUrl);
+      await loadPdfFromUrl(downloadUrl);
 
     } catch (error) {
       console.error('Failed to upload PDF:', error);

@@ -7,21 +7,19 @@ export async function POST(request: NextRequest) {
   if (!session?.userId) {
     return NextResponse.json({ message: 'Unauthorized' }, { status: 401 });
   }
-
+  
   const { filename } = await request.json();
   const blobName = `${session.userId}/${filename}`;
 
   try {
+    // The Vercel Blob SDK now returns a different object structure.
+    // We need to request a presigned URL for the client to upload to.
     const blob = await put(blobName, '', {
       access: 'public',
       addRandomSuffix: false,
     });
-    
-    // The SDK returns a presigned URL for upload, but we can construct the final URL directly.
-    // This seems to be a nuance of how @vercel/blob works.
-    const finalUrl = `https://${new URL(blob.url).hostname}/${blob.pathname}`;
 
-    return NextResponse.json({ url: finalUrl, postUrl: blob.url });
+    return NextResponse.json(blob);
 
   } catch (error) {
     console.error('Error uploading file:', error);
