@@ -9,7 +9,7 @@ type PdfViewerProps = {
   scale: number;
 };
 
-const PageCanvas: React.FC<{ page: PDFPageProxy; scale: number; }> = ({ page, scale }) => {
+const PageCanvas: React.FC<{ page: PDFPageProxy; scale: number; }> = React.memo(({ page, scale }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
   useEffect(() => {
@@ -38,10 +38,11 @@ const PageCanvas: React.FC<{ page: PDFPageProxy; scale: number; }> = ({ page, sc
   }, [page, scale]);
 
   return <canvas ref={canvasRef} className="mx-auto mb-4 shadow-lg" />;
-};
+});
+PageCanvas.displayName = "PageCanvas";
 
 
-const PdfViewer: React.FC<PdfViewerProps> = ({ pdfDoc, scale }) => {
+const PdfViewer: React.FC<PdfViewerProps> = React.memo(({ pdfDoc, scale }) => {
   const [pages, setPages] = useState<PDFPageProxy[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -51,12 +52,17 @@ const PdfViewer: React.FC<PdfViewerProps> = ({ pdfDoc, scale }) => {
     const fetchPages = async () => {
       setLoading(true);
       const allPages: PDFPageProxy[] = [];
-      for (let i = 1; i <= pdfDoc.numPages; i++) {
-        const page = await pdfDoc.getPage(i);
-        allPages.push(page);
+      try {
+        for (let i = 1; i <= pdfDoc.numPages; i++) {
+            const page = await pdfDoc.getPage(i);
+            allPages.push(page);
+        }
+        setPages(allPages);
+      } catch (error) {
+        console.error("Error fetching pages", error);
+      } finally {
+        setLoading(false);
       }
-      setPages(allPages);
-      setLoading(false);
     };
 
     fetchPages();
@@ -64,20 +70,21 @@ const PdfViewer: React.FC<PdfViewerProps> = ({ pdfDoc, scale }) => {
 
   if (loading) {
     return (
-        <div className="space-y-4">
-            <Skeleton className="h-[700px] w-[500px] rounded-md" />
-            <Skeleton className="h-[700px] w-[500px] rounded-md" />
+        <div className="space-y-4 p-4">
+            <Skeleton className="h-[842px] w-[595px] rounded-md mx-auto" />
+            <Skeleton className="h-[842px] w-[595px] rounded-md mx-auto" />
         </div>
     );
   }
 
   return (
-    <div className="w-full h-full">
-      {pages.map((page, index) => (
-        <PageCanvas key={`page-${index + 1}`} page={page} scale={scale} />
+    <div className="w-full h-full p-4">
+      {pages.map((page) => (
+        <PageCanvas key={`page-${page.pageNumber}`} page={page} scale={scale} />
       ))}
     </div>
   );
-};
+});
+PdfViewer.displayName = "PdfViewer";
 
 export default PdfViewer;

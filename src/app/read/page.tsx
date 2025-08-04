@@ -69,10 +69,10 @@ const ReaderView = () => {
     const fileInputRef = useRef<HTMLInputElement>(null);
     const audioRef = useRef<HTMLAudioElement | null>(null);
     const previewAudioRef = useRef<HTMLAudioElement | null>(null);
-    const viewerRef = useRef<HTMLDivElement>(null);
+    const viewerContainerRef = useRef<HTMLDivElement>(null);
     const controlsTimeoutRef = useRef<NodeJS.Timeout | null>(null);
     const router = useRouter();
-    const { state: sidebarState, isMobile } = useSidebar();
+    const { isMobile } = useSidebar();
 
 
     const fetchUserDocuments = useCallback(async () => {
@@ -120,7 +120,7 @@ const ReaderView = () => {
     }
 
     useEffect(() => {
-        const viewer = viewerRef.current;
+        const viewer = viewerContainerRef.current;
         if(pdfState === 'loaded') {
             handleHideControls();
             viewer?.addEventListener('mousemove', handleHideControls);
@@ -345,13 +345,19 @@ const ReaderView = () => {
     }
   
     const toggleFullScreen = () => {
-      if (!viewerRef.current) return;
+      const element = viewerContainerRef.current;
+      if (!element) return;
+  
       if (!document.fullscreenElement) {
-        viewerRef.current.requestFullscreen();
-        setIsFullScreen(true);
+        element.requestFullscreen().catch(err => {
+          toast({
+            variant: "destructive",
+            title: "Fullscreen Error",
+            description: `Error attempting to enable full-screen mode: ${err.message} (${err.name})`,
+          });
+        });
       } else {
         document.exitFullscreen();
-        setIsFullScreen(false);
       }
     };
   
@@ -384,7 +390,7 @@ const ReaderView = () => {
       switch (pdfState) {
         case 'loading':
           return (
-            <div className="flex flex-col items-center justify-center text-center space-y-4">
+            <div className="flex flex-col items-center justify-center h-full text-center space-y-4">
               <Loader2 className="w-16 h-16 text-primary animate-spin" />
               <p className="text-lg font-medium">Loading PDF...</p>
               <Progress value={loadingProgress} className="w-full max-w-md" />
@@ -396,7 +402,7 @@ const ReaderView = () => {
           );
         case 'error':
           return (
-            <div className="flex flex-col items-center justify-center text-center space-y-4">
+            <div className="flex flex-col items-center justify-center h-full text-center space-y-4">
               <p className="text-destructive">Failed to load PDF.</p>
               <Button onClick={() => fileInputRef.current?.click()}>Try another file</Button>
             </div>
@@ -404,7 +410,7 @@ const ReaderView = () => {
         case 'idle':
         default:
           return (
-            <div className="flex flex-col items-center justify-center text-center space-y-4 p-8 border-2 border-dashed border-primary/50 rounded-2xl cursor-pointer hover:bg-primary/5 transition-colors duration-300"
+            <div className="flex flex-col items-center justify-center h-full text-center space-y-4 p-8 border-2 border-dashed border-primary/50 rounded-2xl cursor-pointer hover:bg-primary/5 transition-colors duration-300"
               onClick={() => fileInputRef.current?.click()}>
               <UploadCloud className="w-16 h-16 text-primary" />
               <h2 className="text-2xl font-headline">Upload your PDF</h2>
@@ -488,13 +494,11 @@ const ReaderView = () => {
             </SidebarFooter>
           </Sidebar>
           
-          <div className="flex flex-1 flex-col" ref={viewerRef}>
+          <div className="flex flex-1 flex-col" ref={viewerContainerRef}>
               <div className="relative flex-1 flex">
-                 {sidebarState === 'collapsed' && !isMobile && (
-                     <div className="absolute top-4 left-4 z-50">
-                        <SidebarTrigger />
-                     </div>
-                 )}
+                 <div className="absolute top-4 left-4 z-50">
+                    <SidebarTrigger />
+                 </div>
                  {pdfState === 'loaded' && (
                    <div className={cn("absolute inset-x-0 top-0 z-50 transition-opacity duration-300", showControls ? 'opacity-100' : 'opacity-0 pointer-events-none')}>
                      <PdfToolbar
@@ -513,7 +517,7 @@ const ReaderView = () => {
                      />
                    </div>
                  )}
-                 <main className="flex-1 flex items-center justify-center p-4 overflow-auto">
+                 <main className="flex-1 flex items-center justify-center overflow-auto bg-muted/30">
                    {renderContent()}
                  </main>
                  {pdfState === 'loaded' && (
@@ -554,5 +558,3 @@ export default function ReadPage() {
         </SidebarProvider>
     )
 }
-
-    
