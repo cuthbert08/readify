@@ -1,3 +1,5 @@
+'use server';
+
 import { kv } from '@vercel/kv';
 import { NextRequest, NextResponse } from 'next/server';
 import bcrypt from 'bcrypt';
@@ -31,11 +33,14 @@ export async function POST(req: NextRequest) {
       isAdmin,
       createdAt: Date.now(),
     };
-
-    await kv.set(`user:${email}`, JSON.stringify(user));
+    
+    // kv.set automatically stringifies objects
+    await kv.set(`user:${email}`, user);
+    
+    const userById = {id: userId, email, isAdmin, createdAt: user.createdAt};
 
     // Also store user by ID for easier retrieval
-    await kv.set(`user-by-id:${userId}`, JSON.stringify({id: userId, email, isAdmin, createdAt: user.createdAt}));
+    await kv.set(`user-by-id:${userId}`, userById);
 
     return NextResponse.json({ message: 'User created successfully' }, { status: 201 });
   } catch (error) {
