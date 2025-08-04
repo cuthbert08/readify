@@ -4,7 +4,7 @@
 import { kv } from '@vercel/kv';
 import { getSession, type SessionPayload } from './session';
 import { randomUUID } from 'crypto';
-import type { Sentence } from '@/ai/schemas';
+import type { WordTimestamp } from '@/ai/schemas';
 
 export interface Document {
   id: string;
@@ -12,7 +12,7 @@ export interface Document {
   fileName: string;
   pdfUrl: string;
   audioUrl: string | null;
-  sentences: Sentence[] | null;
+  words: WordTimestamp[] | null;
   zoomLevel: number;
   createdAt: string; 
 }
@@ -52,7 +52,7 @@ export async function saveDocument(docData: {
   fileName: string;
   pdfUrl: string;
   audioUrl?: string | null;
-  sentences?: Sentence[] | null;
+  words?: WordTimestamp[] | null;
   zoomLevel?: number;
 }): Promise<Document> {
   const session = await getSession();
@@ -70,7 +70,6 @@ export async function saveDocument(docData: {
         throw new Error('Document not found.');
     }
     
-    // Admins can edit any doc, users can only edit their own
     if (!session.isAdmin && existingDocRaw.userId !== userId) {
       throw new Error('Access denied.');
     }
@@ -78,7 +77,7 @@ export async function saveDocument(docData: {
       ...existingDocRaw,
       ...docData,
       audioUrl: docData.audioUrl !== undefined ? docData.audioUrl : existingDocRaw.audioUrl,
-      sentences: docData.sentences !== undefined ? docData.sentences : existingDocRaw.sentences,
+      words: docData.words !== undefined ? docData.words : existingDocRaw.words,
       zoomLevel: docData.zoomLevel !== undefined ? docData.zoomLevel : existingDocRaw.zoomLevel,
     };
     await kv.set(`doc:${docId}`, updatedDoc);
@@ -92,7 +91,7 @@ export async function saveDocument(docData: {
       fileName: docData.fileName,
       pdfUrl: docData.pdfUrl,
       audioUrl: docData.audioUrl || null,
-      sentences: docData.sentences || null,
+      words: docData.words || null,
       zoomLevel: docData.zoomLevel || 1,
       createdAt: new Date().toISOString(),
     };
@@ -119,13 +118,13 @@ export async function getDocuments(): Promise<Document[]> {
     return [];
   }
 
-  // Filter out potential null/undefined values from lrange result before fetching
   const validDocIds = docIds.filter(id => id);
   if (validDocIds.length === 0) {
     return [];
   }
 
-  const docs = await kv.mget<Document[]>(...validDocIds.map(id => `doc:${id}`));
+  const docKeys = validDocIds.map(id => `doc:${id}`);
+  const docs = await kv.mget<Document[]>(...docKeys);
 
   return docs
     .filter((doc): doc is Document => doc !== null)

@@ -6,13 +6,13 @@ import * as pdfjsLib from 'pdfjs-dist';
 import type { PDFDocumentProxy } from 'pdfjs-dist/types/src/display/api';
 import { UploadCloud, FileText, Loader2, LogOut, Save, Library, Download, Bot, Lightbulb, HelpCircle, Cloud, CloudOff, Settings, Menu, Home, BarChart, BookOpenCheck, BrainCircuit, Mic, FastForward, Rewind, Wind, Maximize, Minimize, ZoomIn, ZoomOut } from 'lucide-react';
 import { useRouter } from 'next/navigation';
-import PdfViewer, { TextItem } from '@/components/pdf-viewer';
+import PdfViewer from '@/components/pdf-viewer';
 import AudioPlayer from '@/components/audio-player';
 import { useToast } from "@/hooks/use-toast";
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { getAvailableVoices, AvailableVoicesOutput } from '@/ai/flows/voice-selection';
-import { generateSpeech } from '@/ai/flows/tts-flow';
+import { generateSpeechWithTimings } from '@/ai/flows/generate-speech-with-timings';
 import { previewSpeech } from '@/ai/flows/preview-speech';
 import { summarizePdf, SummarizePdfOutput } from '@/ai/flows/summarize-pdf';
 import { chatWithPdf, ChatWithPdfOutput } from '@/ai/flows/chat-with-pdf';
@@ -32,11 +32,12 @@ import { Label } from '@/components/ui/label';
 import { Slider } from '@/components/ui/slider';
 import { Volume2 } from 'lucide-react';
 import { useMediaQuery } from '@/hooks/use-media-query';
-import type { Sentence } from '@/ai/schemas';
+import type { WordTimestamp } from '@/ai/schemas';
 import TextSelectionMenu from '@/components/text-selection-menu';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Textarea } from '@/components/ui/textarea';
 import { Card } from '@/components/ui/card';
+import { generateSpeech } from '@/ai/flows/generate-speech-with-timings';
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
   'pdfjs-dist/build/pdf.worker.min.mjs',
@@ -44,39 +45,16 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
 ).toString();
 
 type PdfState = 'idle' | 'loading' | 'loaded' | 'error';
+type ProcessingStage = 'idle' | 'cleaning' | 'generating' | 'syncing' | 'error';
+
 type ActiveDocument = {
   id: string | null;
   file: File | null;
   doc: PDFDocumentProxy | null;
   url: string | null;
   audioUrl?: string | null;
-  sentences?: Sentence[] | null;
+  words?: WordTimestamp[] | null;
 };
-
-const WORDS_PER_MINUTE = 150;
-
-function estimateSentences(text: string, rate: number): Sentence[] {
-    const sentenceEndings = /(?<!\w\.\w.)(?<![A-Z][a-z]\.)(?<=\.|\?|!)\s/g;
-    const sentenceStrings = text.replace(/\s+/g, ' ').trim().split(sentenceEndings);
-    
-    let currentTime = 0;
-    const sentences: Sentence[] = [];
-
-    for (const s of sentenceStrings) {
-        if (!s) continue;
-        const sentenceText = s.trim();
-        const wordCount = sentenceText.split(/\s+/).length;
-        const duration = (wordCount / (WORDS_PER_MINUTE * rate)) * 60; // in seconds
-        
-        sentences.push({
-            text: sentenceText,
-            startTime: currentTime,
-            endTime: currentTime + duration,
-        });
-        currentTime += duration;
-    }
-    return sentences;
-}
 
 export default function ReadPage() {
     const [pdfState, setPdfState] = useState<PdfState>('idle');
@@ -92,12 +70,12 @@ export default function ReadPage() {
     const [allTextItems, setAllTextItems] = useState<TextItem[]>([]);
   
     const [isSpeaking, setIsSpeaking] = useState(false);
-    const [isGeneratingSpeech, setIsGeneratingSpeech] = useState(false);
+    const [processingStage, setProcessingStage] = useState<ProcessingStage>('idle');
     const [generatedAudioUrl, setGeneratedAudioUrl] = useState<string | null>(null);
     const [audioProgress, setAudioProgress] = useState(0);
     const [audioDuration, setAudioDuration] = useState(0);
     const [audioCurrentTime, setAudioCurrentTime] = useState(0);
-    const [currentSentence, setCurrentSentence] = useState<Sentence | null>(null);
+    const [currentWord, setCurrentWord] = useState<WordTimestamp | null>(null);
   
     const [availableVoices, setAvailableVoices] = useState<AvailableVoicesOutput>([]);
     const [selectedVoice, setSelectedVoice] = useState<string>('alloy');
@@ -122,13 +100,11 @@ export default function ReadPage() {
     const [selection, setSelection] = useState<{ text: string; page: number, rect: DOMRect } | null>(null);
     const [isDragging, setIsDragging] = useState(false);
     
-    // State for Text-to-Audio tab
     const [synthesisText, setSynthesisText] = useState('');
     const [synthesisVoice, setSynthesisVoice] = useState('alloy');
     const [synthesisRate, setSynthesisRate] = useState(1.0);
     const [isSynthesizing, setIsSynthesizing] = useState(false);
     const [synthesisAudioUrl, setSynthesisAudioUrl] = useState<string | null>(null);
-    const synthesisAudioRef = useRef<HTMLAudioElement | null>(null);
 
     const { toast } = useToast();
     const fileInputRef = useRef<HTMLInputElement>(null);
@@ -137,6 +113,8 @@ export default function ReadPage() {
     const viewerContainerRef = useRef<HTMLDivElement>(null);
     const controlsTimeoutRef = useRef<NodeJS.Timeout | null>(null);
     const router = useRouter();
+
+    const isGeneratingSpeech = processingStage === 'cleaning' || processingStage === 'generating' || processingStage === 'syncing';
 
     useEffect(() => {
       async function checkSession() {
@@ -221,7 +199,7 @@ export default function ReadPage() {
       setAiExplanationOutput(null);
       setAiQuizOutput(null);
       setGeneratedAudioUrl(null);
-      setCurrentSentence(null);
+      setCurrentWord(null);
   
       try {
         const loadingTask = pdfjsLib.getDocument(typeof source === 'string' ? { url: source } : { data: await source.arrayBuffer() });
@@ -258,7 +236,7 @@ export default function ReadPage() {
           doc: pdf,
           url: typeof source === 'string' ? source : null,
           audioUrl: savedData?.audioUrl,
-          sentences: savedData?.sentences as Sentence[] || null,
+          words: savedData?.words as WordTimestamp[] || null,
         };
 
         setActiveDoc(docToLoad);
@@ -308,7 +286,7 @@ export default function ReadPage() {
       await loadPdf(doc.pdfUrl, doc.id, doc);
     }
   
-    const handleSaveAfterAudio = async (audioUrl: string, sentences: Sentence[]) => {
+    const handleSaveAfterAudio = async (audioUrl: string, words: WordTimestamp[]) => {
         if (!activeDoc || !activeDoc.doc) return;
     
         if (!activeDoc.file && !activeDoc.id) {
@@ -345,12 +323,12 @@ export default function ReadPage() {
             pdfUrl: pdfUrl,
             zoomLevel: zoomLevel,
             audioUrl: audioUrl,
-            sentences: sentences,
+            words: words,
           };
     
           const savedDoc = await saveDocument(docToSave);
     
-          setActiveDoc(prev => prev ? { ...prev, id: savedDoc.id, file: null, url: savedDoc.pdfUrl, audioUrl: savedDoc.audioUrl, sentences: savedDoc.sentences as Sentence[] } : null);
+          setActiveDoc(prev => prev ? { ...prev, id: savedDoc.id, file: null, url: savedDoc.pdfUrl, audioUrl: savedDoc.audioUrl, words: savedDoc.words as WordTimestamp[] } : null);
         
           await fetchUserDocuments(); 
     
@@ -388,20 +366,15 @@ export default function ReadPage() {
       if (!documentText || !activeDoc) return;
   
       try {
-        setIsGeneratingSpeech(true);
-        toast({ title: "Cleaning up text...", description: "AI is removing headers and footers." });
-        
+        setProcessingStage('cleaning');
         const { cleanedText } = await cleanPdfText({ rawText: documentText });
 
         if (!cleanedText || !cleanedText.trim()) {
             throw new Error("No readable content found in the document after cleaning.");
         }
-
-        toast({ title: "Generating audio...", description: "This may take a moment." });
-
-        const sentences = estimateSentences(cleanedText, speakingRate);
-
-        const result = await generateSpeech({ 
+        
+        setProcessingStage('generating');
+        const result = await generateSpeechWithTimings({ 
             text: cleanedText, 
             voice: selectedVoice as any,
             speakingRate: speakingRate,
@@ -411,12 +384,12 @@ export default function ReadPage() {
           throw new Error('Audio generation failed to return data.');
         }
 
+        setProcessingStage('syncing');
         setGeneratedAudioUrl(result.audioDataUri);
-        setActiveDoc(prev => prev ? { ...prev, audioUrl: result.audioDataUri, sentences: sentences } : null);
+        setActiveDoc(prev => prev ? { ...prev, audioUrl: result.audioDataUri, words: result.words } : null);
         
-        setIsGeneratingSpeech(false);
-        
-        await handleSaveAfterAudio(result.audioDataUri, sentences);
+        await handleSaveAfterAudio(result.audioDataUri, result.words);
+        setProcessingStage('idle');
 
         if (audioRef.current) {
           audioRef.current.src = result.audioDataUri;
@@ -426,27 +399,29 @@ export default function ReadPage() {
 
       } catch (error) {
         console.error('Speech generation error', error);
-        setIsGeneratingSpeech(false);
+        setProcessingStage('error');
         setIsSpeaking(false);
         const errorMessage = error instanceof Error ? error.message : "An unknown error occurred";
         toast({ variant: "destructive", title: "Audio Error", description: `Could not generate audio for the document. ${errorMessage}` });
+        // Reset stage after showing error
+        setTimeout(() => setProcessingStage('idle'), 2000);
       }
     };
 
     const handleAudioTimeUpdate = () => {
-        if (!audioRef.current || !activeDoc?.sentences?.length) {
-            setCurrentSentence(null);
+        if (!audioRef.current || !activeDoc?.words?.length) {
+            setCurrentWord(null);
             return;
         }
         const currentTime = audioRef.current.currentTime;
-        const sentence = activeDoc.sentences.find(s => currentTime >= s.startTime && currentTime < s.endTime);
+        const word = activeDoc.words.find(w => currentTime >= w.start && currentTime <= w.end);
         
-        if (sentence) {
-          if (currentSentence?.text !== sentence.text) {
-             setCurrentSentence(sentence);
+        if (word) {
+          if (currentWord?.start !== word.start) {
+             setCurrentWord(word);
           }
         } else {
-            setCurrentSentence(null);
+            setCurrentWord(null);
         }
 
         setAudioCurrentTime(currentTime);
@@ -599,7 +574,7 @@ export default function ReadPage() {
             pdfUrl: activeDoc.url || '',
             zoomLevel: zoomLevel,
             audioUrl: activeDoc.audioUrl,
-            sentences: activeDoc.sentences,
+            words: activeDoc.words,
           }).catch(err => console.error("Failed to auto-save progress", err));
         }, 2000); 
         return () => clearTimeout(timer);
@@ -608,6 +583,16 @@ export default function ReadPage() {
 
     const handleTextSelect = (text: string, page: number, rect: DOMRect) => {
         setSelection({text, page, rect});
+    }
+    
+    const getProcessingMessage = () => {
+        switch (processingStage) {
+            case 'cleaning': return 'AI is cleaning the document text...';
+            case 'generating': return 'Generating audio, this may take a moment...';
+            case 'syncing': return 'Finalizing audio and text sync...';
+            case 'error': return 'An error occurred during audio generation.';
+            default: return '';
+        }
     }
 
     const renderContent = () => {
@@ -698,7 +683,7 @@ export default function ReadPage() {
                             {synthesisAudioUrl && (
                                 <div className="space-y-2">
                                     <Label>Generated Audio</Label>
-                                    <audio ref={synthesisAudioRef} src={synthesisAudioUrl} controls className="w-full" />
+                                    <audio src={synthesisAudioUrl} controls className="w-full" />
                                      <a href={synthesisAudioUrl} download="synthesis.mp3">
                                         <Button variant="outline" className="w-full">
                                             <Download className="mr-2" />
@@ -912,7 +897,7 @@ export default function ReadPage() {
                         pdfDoc={activeDoc?.doc || null} 
                         scale={zoomLevel} 
                         allTextItems={allTextItems}
-                        highlightSentence={currentSentence}
+                        highlightWord={currentWord}
                         onTextSelect={handleTextSelect}
                     />
                      {selection && viewerContainerRef.current && (
@@ -929,7 +914,8 @@ export default function ReadPage() {
                 <div className={cn("absolute inset-x-0 bottom-0 z-10 transition-opacity duration-300", showControls ? 'opacity-100' : 'opacity-0 pointer-events-none')}>
                     <AudioPlayer
                         isSpeaking={isSpeaking}
-                        isGeneratingSpeech={isGeneratingSpeech}
+                        processingStage={processingStage}
+                        processingMessage={getProcessingMessage()}
                         onPlayPause={handlePlayPause}
                         canPlay={!!documentText}
                         isFullScreen={isFullScreen}
@@ -977,5 +963,3 @@ export default function ReadPage() {
       </TooltipProvider>
     );
 }
-
-    

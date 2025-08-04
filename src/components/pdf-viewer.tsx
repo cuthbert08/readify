@@ -5,7 +5,7 @@ import React, { useRef, useEffect, useState } from 'react';
 import type { PDFDocumentProxy, PDFPageProxy } from 'pdfjs-dist/types/src/display/api';
 import type { TextItem as PdfTextItem } from 'pdfjs-dist/types/src/display/api';
 import { Skeleton } from './ui/skeleton';
-import type { Sentence } from '@/ai/schemas';
+import type { WordTimestamp } from '@/ai/schemas';
 
 export type TextItem = {
     text: string;
@@ -19,7 +19,7 @@ type PdfViewerProps = {
   pdfDoc: PDFDocumentProxy | null;
   scale: number;
   allTextItems: TextItem[];
-  highlightSentence: Sentence | null;
+  highlightWord: WordTimestamp | null;
   onTextSelect: (text: string, pageNumber: number, rect: DOMRect) => void;
 };
 
@@ -27,9 +27,9 @@ const PageCanvas: React.FC<{
     page: PDFPageProxy;
     scale: number;
     textItems: TextItem[];
-    highlightSentence: Sentence | null;
+    highlightWord: WordTimestamp | null;
     onTextSelect: (text: string, pageNumber: number, rect: DOMRect) => void;
-}> = React.memo(({ page, scale, textItems, highlightSentence, onTextSelect }) => {
+}> = React.memo(({ page, scale, textItems, highlightWord, onTextSelect }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const textLayerRef = useRef<HTMLDivElement>(null);
   const highlightContainerRef = useRef<HTMLDivElement>(null);
@@ -104,7 +104,7 @@ const PageCanvas: React.FC<{
             }
         }
     }
-}, [highlightSentence]);
+  }, [highlightWord]);
 
   const handleMouseUp = () => {
     const selection = window.getSelection();
@@ -122,16 +122,34 @@ const PageCanvas: React.FC<{
   }
 
   const getHighlightBoxes = (): React.ReactElement[] => {
-    if (!highlightSentence || !textItems.length || !isRendered) return [];
+    if (!highlightWord || !textItems.length || !isRendered) return [];
   
     const pageText = textItems.map(item => item.text).join('');
-    const sentenceText = highlightSentence.text.trim();
-    const startIndex = pageText.indexOf(sentenceText);
+    const wordText = highlightWord.word.trim();
+    if (!wordText) return [];
+
+    let startIndex = -1;
+    let textPosition = 0;
+    
+    for (const item of textItems) {
+      const itemText = item.text;
+      const wordIndexInItem = itemText.indexOf(wordText);
+      if (wordIndexInItem !== -1) {
+        // A simple check to see if this is roughly the right place in the text
+        const estimatedChars = highlightWord.start * 20; // 20 chars per second rough estimate
+        if (Math.abs(textPosition - estimatedChars) < 500) { // Check within a reasonable character window
+          startIndex = textPosition + wordIndexInItem;
+          break;
+        }
+      }
+      textPosition += itemText.length;
+    }
+
 
     if (startIndex === -1) return [];
 
     let charIndex = startIndex;
-    const endIndex = startIndex + sentenceText.length;
+    const endIndex = startIndex + wordText.length;
     const boxes: React.ReactElement[] = [];
     
     let textItemIndex = -1;
@@ -200,7 +218,7 @@ const PageCanvas: React.FC<{
 });
 PageCanvas.displayName = "PageCanvas";
 
-const PdfViewer: React.FC<PdfViewerProps> = React.memo(({ pdfDoc, scale, allTextItems, highlightSentence, onTextSelect }) => {
+const PdfViewer: React.FC<PdfViewerProps> = React.memo(({ pdfDoc, scale, allTextItems, highlightWord, onTextSelect }) => {
   const [pages, setPages] = useState<PDFPageProxy[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -243,7 +261,7 @@ const PdfViewer: React.FC<PdfViewerProps> = React.memo(({ pdfDoc, scale, allText
             page={page} 
             scale={scale}
             textItems={allTextItems.filter(item => item.pageNumber === page.pageNumber)}
-            highlightSentence={highlightSentence}
+            highlightWord={highlightWord}
             onTextSelect={onTextSelect}
         />
       ))}

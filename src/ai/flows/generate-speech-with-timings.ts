@@ -1,21 +1,19 @@
-
 'use server';
 
 /**
- * @fileOverview A text-to-speech AI agent using OpenAI.
- * This flow is now simplified to only handle audio generation.
- * Sentence timing estimation is handled on the client-side.
+ * @fileOverview An advanced text-to-speech AI agent using OpenAI.
+ * This flow generates audio and provides precise word-level timing information.
  *
- * - generateSpeech - A function that handles the text-to-speech process.
+ * - generateSpeechWithTimings - A function that handles the text-to-speech process.
  */
 import { ai } from '@/ai/genkit';
-import { GenerateSpeechInputSchema, GenerateSpeechOutputSchema } from '@/ai/schemas';
+import { GenerateSpeechWithTimingsInputSchema, GenerateSpeechWithTimingsOutputSchema } from '@/ai/schemas';
 
-export const generateSpeech = ai.defineFlow(
+export const generateSpeechWithTimings = ai.defineFlow(
   {
-    name: 'generateSpeech',
-    inputSchema: GenerateSpeechInputSchema,
-    outputSchema: GenerateSpeechOutputSchema,
+    name: 'generateSpeechWithTimings',
+    inputSchema: GenerateSpeechWithTimingsInputSchema,
+    outputSchema: GenerateSpeechWithTimingsOutputSchema,
   },
   async (input) => {
     
@@ -23,26 +21,32 @@ export const generateSpeech = ai.defineFlow(
         throw new Error("Input text cannot be empty.");
     }
 
-    // Generate speech from the text using OpenAI
-    const { media: audioMedia } = await ai.generate({
-      model: 'openai/tts-1',
+    // Generate speech from the text using OpenAI, requesting word-level timestamps
+    const { media, content } = await ai.generate({
+      model: 'openai/tts-1-hd',
       prompt: input.text,
       config: {
         voice: input.voice,
         speed: input.speakingRate || 1.0,
-        response_format: 'mp3',
+        response_format: 'json', // Request JSON to get timing info
       },
       output: {
         format: 'url'
       }
     });
 
-    if (!audioMedia || !audioMedia.url) {
+    if (!media || !media.url) {
         throw new Error('No media URL returned from OpenAI. Check OpenAI API response.');
     }
 
+    // The 'content' part should contain the timing information
+    const timingData = content[0]?.data;
+    if (!timingData || !timingData.words) {
+      throw new Error('Word timing information was not returned from the API.');
+    }
+
     try {
-        const audioResponse = await fetch(audioMedia.url);
+        const audioResponse = await fetch(media.url);
         if (!audioResponse.ok) {
             const errorBody = await audioResponse.text();
             throw new Error(`Failed to fetch audio from OpenAI URL: ${audioResponse.statusText} (Status: ${audioResponse.status}) - ${errorBody}`);
@@ -54,6 +58,7 @@ export const generateSpeech = ai.defineFlow(
 
         return {
             audioDataUri: audioDataUri,
+            words: timingData.words,
         };
 
     } catch (fetchError: any) {
@@ -62,5 +67,3 @@ export const generateSpeech = ai.defineFlow(
     }
   }
 );
-
-    
