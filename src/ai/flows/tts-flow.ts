@@ -63,5 +63,6 @@ export async function previewSpeech(input: Omit<GenerateSpeechInput, 'text' | 's
   return ttsFlow({
     ...input,
     text: "Hello! This is a preview of my voice.",
+    speakingRate: 1.0,
   });
 }
