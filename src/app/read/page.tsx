@@ -4,7 +4,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import * as pdfjsLib from 'pdfjs-dist';
 import type { PDFDocumentProxy } from 'pdfjs-dist/types/src/display/api';
-import { UploadCloud, FileText, Loader2, LogOut, Save, Library, Download, Bot, Lightbulb, HelpCircle, PanelLeft } from 'lucide-react';
+import { UploadCloud, FileText, Loader2, LogOut, Save, Library, Download, Bot, Lightbulb, HelpCircle } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import PdfViewer from '@/components/pdf-viewer';
 import AudioPlayer from '@/components/audio-player';
@@ -415,7 +415,7 @@ const ReaderView = () => {
     };
   
     return (
-        <div className="flex h-screen bg-background">
+        <div className="flex h-screen w-full bg-background">
           <input type="file" ref={fileInputRef} onChange={handleFileChange} accept="application/pdf" className="hidden" />
           <Sidebar>
             <SidebarHeader>
@@ -488,46 +488,48 @@ const ReaderView = () => {
             </SidebarFooter>
           </Sidebar>
           
-          <div className="flex-1 flex flex-col relative" ref={viewerRef}>
-              {sidebarState === 'collapsed' && !isMobile && (
-                  <div className="absolute top-4 left-4 z-50">
-                     <SidebarTrigger />
-                  </div>
-              )}
-              {pdfState === 'loaded' && (
-                <div className={cn("absolute inset-x-0 top-0 z-50 transition-opacity duration-300", showControls ? 'opacity-100' : 'opacity-0 pointer-events-none')}>
-                  <PdfToolbar
-                    fileName={fileName}
-                    zoomLevel={zoomLevel}
-                    onZoomIn={() => setZoomLevel(z => Math.min(z + 0.2, 3))}
-                    onZoomOut={() => setZoomLevel(z => Math.max(z - 0.2, 0.4))}
-                    onFullScreen={toggleFullScreen}
-                    isFullScreen={isFullScreen}
-                    showSave={!!activeDoc?.file || (!!activeDoc?.id && !activeDoc.audioUrl)}
-                    onSave={handleSave}
-                    isSaving={isSaving}
-                    showDownload={!!generatedAudioUrl}
-                    downloadUrl={generatedAudioUrl || ''}
-                    downloadFileName={`${fileName || 'audio'}.wav`}
-                  />
-                </div>
-              )}
-              <main className="flex-1 flex items-center justify-center p-4 overflow-auto">
-                {renderContent()}
-              </main>
-              {pdfState === 'loaded' && (
-                <div className={cn("absolute inset-x-0 bottom-0 z-50 transition-opacity duration-300", showControls ? 'opacity-100' : 'opacity-0 pointer-events-none')}>
-                    <AudioPlayer
-                        isSpeaking={isSpeaking}
-                        isGeneratingSpeech={isGeneratingSpeech}
-                        onPlayPause={handlePlayPause}
-                        availableVoices={availableVoices}
-                        selectedVoice={selectedVoice}
-                        onVoiceChange={setSelectedVoice}
-                        onPreviewVoice={handlePreviewVoice}
-                    />
-                </div>
-              )}
+          <div className="flex flex-1 flex-col" ref={viewerRef}>
+              <div className="relative flex-1 flex">
+                 {sidebarState === 'collapsed' && !isMobile && (
+                     <div className="absolute top-4 left-4 z-50">
+                        <SidebarTrigger />
+                     </div>
+                 )}
+                 {pdfState === 'loaded' && (
+                   <div className={cn("absolute inset-x-0 top-0 z-50 transition-opacity duration-300", showControls ? 'opacity-100' : 'opacity-0 pointer-events-none')}>
+                     <PdfToolbar
+                       fileName={fileName}
+                       zoomLevel={zoomLevel}
+                       onZoomIn={() => setZoomLevel(z => Math.min(z + 0.2, 3))}
+                       onZoomOut={() => setZoomLevel(z => Math.max(z - 0.2, 0.4))}
+                       onFullScreen={toggleFullScreen}
+                       isFullScreen={isFullScreen}
+                       showSave={!!activeDoc?.file || (!!activeDoc?.id && !activeDoc.audioUrl)}
+                       onSave={handleSave}
+                       isSaving={isSaving}
+                       showDownload={!!generatedAudioUrl}
+                       downloadUrl={generatedAudioUrl || ''}
+                       downloadFileName={`${fileName || 'audio'}.wav`}
+                     />
+                   </div>
+                 )}
+                 <main className="flex-1 flex items-center justify-center p-4 overflow-auto">
+                   {renderContent()}
+                 </main>
+                 {pdfState === 'loaded' && (
+                   <div className={cn("absolute inset-x-0 bottom-0 z-50 transition-opacity duration-300", showControls ? 'opacity-100' : 'opacity-0 pointer-events-none')}>
+                       <AudioPlayer
+                           isSpeaking={isSpeaking}
+                           isGeneratingSpeech={isGeneratingSpeech}
+                           onPlayPause={handlePlayPause}
+                           availableVoices={availableVoices}
+                           selectedVoice={selectedVoice}
+                           onVoiceChange={setSelectedVoice}
+                           onPreviewVoice={handlePreviewVoice}
+                       />
+                   </div>
+                 )}
+              </div>
           </div>
           <audio ref={audioRef} onEnded={() => setIsSpeaking(false)} hidden />
           <audio ref={previewAudioRef} hidden />
@@ -552,3 +554,5 @@ export default function ReadPage() {
         </SidebarProvider>
     )
 }
+
+    
