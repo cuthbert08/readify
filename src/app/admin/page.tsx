@@ -1,8 +1,9 @@
+
 'use client';
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { BarChart, Home, Users, FileText, Trash2, LogOut } from 'lucide-react';
+import { BarChart, Home, Users, FileText, Trash2, LogOut, PlusCircle } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -18,6 +19,7 @@ import {
 } from "@/components/ui/chart"
 import { BarChart as RechartsBarChart, Bar, XAxis, YAxis, CartesianGrid } from 'recharts';
 import { format, subDays, parseISO } from 'date-fns';
+import AddUserDialog from '@/components/add-user-dialog';
 
 
 const chartConfig = {
@@ -37,6 +39,7 @@ export default function AdminPage() {
   const [users, setUsers] = useState<User[]>([]);
   const [documents, setDocuments] = useState<Document[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isAddUserOpen, setIsAddUserOpen] = useState(false);
 
   const fetchAdminData = async () => {
     setIsLoading(true);
@@ -104,6 +107,7 @@ export default function AdminPage() {
 
 
   return (
+    <>
     <div className="flex min-h-screen w-full flex-col bg-muted/40">
       <header className="sticky top-0 z-30 flex h-14 items-center gap-4 border-b bg-background px-4 sm:static sm:h-auto sm:border-0 sm:bg-transparent sm:px-6">
           <h1 className="text-2xl font-headline text-primary flex items-center gap-2"><BarChart /> Readify Admin</h1>
@@ -184,8 +188,9 @@ export default function AdminPage() {
           {/* User Management Tab */}
           <TabsContent value="users">
             <Card>
-              <CardHeader>
+              <CardHeader className="flex justify-between items-center flex-row">
                 <CardTitle>All Users</CardTitle>
+                <Button onClick={() => setIsAddUserOpen(true)}><PlusCircle className="mr-2"/>Add User</Button>
               </CardHeader>
               <CardContent>
                 <Table>
@@ -255,5 +260,14 @@ export default function AdminPage() {
         </Tabs>
       </main>
     </div>
+    <AddUserDialog 
+      isOpen={isAddUserOpen}
+      onClose={() => setIsAddUserOpen(false)}
+      onUserAdded={() => {
+        fetchAdminData();
+        setIsAddUserOpen(false);
+      }}
+    />
+    </>
   );
 }

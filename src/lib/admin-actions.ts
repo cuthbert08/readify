@@ -4,6 +4,9 @@
 import { kv } from '@vercel/kv';
 import { getSession } from './session';
 import type { User as DbUser } from './db';
+import { randomUUID } from 'crypto';
+import bcrypt from 'bcrypt';
+
 
 export interface Document {
   id: string;
@@ -89,4 +92,44 @@ export async function deleteUser(userId: string): Promise<{ success: boolean; me
     console.error('Failed to delete user:', message);
     return { success: false, message };
   }
+}
+
+export async function createUser(userData: {
+    name: string;
+    email: string;
+    password: string;
+    role: 'Admin' | 'User';
+}): Promise<{ success: boolean, message?: string }> {
+    await checkAdmin();
+
+    try {
+        const { name, email, password, role } = userData;
+
+        const existingUser: User | null = await kv.get(`user:${email}`);
+        if (existingUser) {
+            return { success: false, message: 'User with this email already exists.' };
+        }
+
+        const hashedPassword = await bcrypt.hash(password, 10);
+        const userId = randomUUID();
+        const newUser: User = {
+            id: userId,
+            name,
+            email,
+            password: hashedPassword,
+            isAdmin: role === 'Admin',
+            createdAt: new Date().toISOString(),
+        };
+
+        const pipeline = kv.pipeline();
+        pipeline.set(`user:${email}`, newUser);
+        pipeline.set(`user-by-id:${userId}`, newUser);
+        await pipeline.exec();
+
+        return { success: true };
+    } catch (error) {
+        const message = error instanceof Error ? error.message : 'An unknown error occurred';
+        console.error('Failed to create user:', message);
+        return { success: false, message };
+    }
 }
