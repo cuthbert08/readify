@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, { useRef, useEffect, useState } from 'react';
@@ -89,9 +90,21 @@ const PageCanvas: React.FC<{
 
   useEffect(() => {
     if (highlightRef.current) {
-        highlightRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        const element = highlightRef.current;
+        const parent = element.offsetParent?.parentElement; // The scrolling container
+        if (parent) {
+            const elementRect = element.getBoundingClientRect();
+            const parentRect = parent.getBoundingClientRect();
+
+            if (
+                elementRect.top < parentRect.top ||
+                elementRect.bottom > parentRect.bottom
+            ) {
+                element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
+        }
     }
-  }, [highlightSentence]);
+}, [highlightSentence]);
 
   const handleMouseUp = () => {
     const selection = window.getSelection();
