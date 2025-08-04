@@ -25,10 +25,11 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ message: 'Invalid credentials' }, { status: 401 });
     }
 
-    await createSession({ userId: user.id, isAdmin: user.isAdmin });
+    await createSession(user.id, user.isAdmin);
 
-    console.log(`Login successful for ${email}, isAdmin: ${user.isAdmin}`);
-    return NextResponse.json({ success: true, isAdmin: user.isAdmin });
+    const redirectUrl = user.isAdmin ? '/admin' : '/read';
+    console.log(`Login successful for ${email}, redirecting to ${redirectUrl}`);
+    return NextResponse.json({ success: true, redirectUrl });
 
   } catch (error) {
     console.error('Login API Error:', error);

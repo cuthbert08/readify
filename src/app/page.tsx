@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState } from 'react';
@@ -32,12 +33,8 @@ export default function AuthPage() {
       
       const data = await response.json();
 
-      if (response.ok) {
-        if (data.isAdmin) {
-          router.push('/admin');
-        } else {
-          router.push('/read');
-        }
+      if (response.ok && data.success && data.redirectUrl) {
+        router.push(data.redirectUrl);
       } else {
         toast({
           variant: "destructive",
