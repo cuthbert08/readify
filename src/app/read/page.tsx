@@ -2,8 +2,8 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import * as pdfjsLib from 'pdfjs-dist';
-import type { PDFDocumentProxy, PDFPageProxy, TextContent } from 'pdfjs-dist/types/src/display/api';
-import { UploadCloud, FileText, Loader2, LogOut, Save, Library, Download } from 'lucide-react';
+import type { PDFDocumentProxy } from 'pdfjs-dist/types/src/display/api';
+import { UploadCloud, FileText, Loader2, LogOut, Save, Library, Download, Bot, Lightbulb, HelpCircle } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import PdfViewer from '@/components/pdf-viewer';
 import AudioPlayer from '@/components/audio-player';
@@ -13,10 +13,12 @@ import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { getAvailableVoices, AvailableVoicesOutput } from '@/ai/flows/voice-selection';
 import { generateSpeech, previewSpeech } from '@/ai/flows/tts-flow';
+import { summarizePdf, SummarizePdfOutput } from '@/ai/flows/summarize-pdf';
+import { chatWithPdf, ChatWithPdfOutput } from '@/ai/flows/chat-with-pdf';
 import { Sidebar, SidebarProvider, SidebarTrigger, SidebarContent, SidebarHeader, SidebarMenu, SidebarMenuItem, SidebarMenuButton, SidebarFooter, SidebarRail } from '@/components/ui/sidebar';
 import { getDocuments, saveDocument, Document } from '@/lib/db';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { getSession } from '@/lib/session';
+import AiDialog, { AiDialogType } from '@/components/ai-dialog';
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.mjs`;
 
@@ -51,6 +53,12 @@ export default function ReadPage() {
   const [selectedVoice, setSelectedVoice] = useState<string>('Algenib');
   
   const [userDocuments, setUserDocuments] = useState<Document[]>([]);
+  
+  const [isAiDialogOpen, setIsAiDialogOpen] = useState(false);
+  const [aiDialogType, setAiDialogType] = useState<AiDialogType>('summary');
+  const [aiIsLoading, setAiIsLoading] = useState(false);
+  const [aiSummaryOutput, setAiSummaryOutput] = useState<SummarizePdfOutput | null>(null);
+  const [aiChatOutput, setAiChatOutput] = useState<ChatWithPdfOutput | null>(null);
 
   const { toast } = useToast();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -79,7 +87,6 @@ export default function ReadPage() {
       try {
         const voices = await getAvailableVoices();
         setAvailableVoices(voices);
-        // Also set initial audio URL if doc has one
         if (activeDoc?.audioUrl) {
             setGeneratedAudioUrl(activeDoc.audioUrl);
         }
@@ -104,6 +111,8 @@ export default function ReadPage() {
     setLoadingProgress(0);
     setActiveDoc(null);
     setDocumentText('');
+    setAiSummaryOutput(null);
+    setAiChatOutput(null);
     setGeneratedAudioUrl(null);
     setTotalPages(0);
     setCurrentPage(1);
@@ -271,6 +280,38 @@ export default function ReadPage() {
     }
   }
 
+  const handleAiAction = async (type: AiDialogType) => {
+    if (!documentText) return;
+    setAiDialogType(type);
+    setIsAiDialogOpen(true);
+    setAiIsLoading(true);
+
+    if (type === 'summary' || type === 'key-points') {
+      try {
+        const result = await summarizePdf({ pdfText: documentText });
+        setAiSummaryOutput(result);
+      } catch (error) {
+        console.error('AI Summary Error:', error);
+        toast({ variant: "destructive", title: "AI Error", description: "Could not generate summary or key points." });
+      }
+    }
+    setAiIsLoading(false);
+  };
+
+  const handleAiChat = async (question: string) => {
+    if (!documentText || !question) return;
+    setAiIsLoading(true);
+    setAiChatOutput(null);
+    try {
+      const result = await chatWithPdf({ pdfText: documentText, question });
+      setAiChatOutput(result);
+    } catch (error) {
+      console.error('AI Chat Error:', error);
+      toast({ variant: "destructive", title: "AI Error", description: "Could not get an answer." });
+    }
+    setAiIsLoading(false);
+  }
+
   const toggleFullScreen = () => {
     if (!viewerRef.current) return;
     if (!document.fullscreenElement) {
@@ -405,6 +446,15 @@ export default function ReadPage() {
               </div>
               <div className="flex items-center gap-2">
                 {pdfState === 'loaded' && (
+                  <>
+                    <Button variant="outline" onClick={() => handleAiAction('summary')}>
+                      <Bot className="mr-2" />
+                      Summarize &amp; Key Points
+                    </Button>
+                     <Button variant="outline" onClick={() => handleAiAction('chat')}>
+                      <HelpCircle className="mr-2" />
+                      Ask a Question
+                    </Button>
                     <PdfToolbar
                         zoomLevel={zoomLevel}
                         onZoomIn={() => setZoomLevel(z => Math.min(z + 0.2, 3))}
@@ -412,6 +462,7 @@ export default function ReadPage() {
                         onFullScreen={toggleFullScreen}
                         isFullScreen={isFullScreen}
                     />
+                  </>
                 )}
                 {pdfState === 'loaded' && (activeDoc?.file || (activeDoc?.id && !activeDoc.audioUrl)) && (
                   <Button onClick={handleSave} disabled={isSaving}>
@@ -446,6 +497,15 @@ export default function ReadPage() {
         </div>
         <audio ref={audioRef} onEnded={() => setIsSpeaking(false)} hidden />
         <audio ref={previewAudioRef} hidden />
+        <AiDialog
+          open={isAiDialogOpen}
+          onOpenChange={setIsAiDialogOpen}
+          type={aiDialogType}
+          isLoading={aiIsLoading}
+          summaryOutput={aiSummaryOutput}
+          chatOutput={aiChatOutput}
+          onChatSubmit={handleAiChat}
+        />
       </div>
     </SidebarProvider>
   );

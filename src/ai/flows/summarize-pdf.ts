@@ -1,9 +1,9 @@
 'use server';
 
 /**
- * @fileOverview A PDF summarization AI agent.
+ * @fileOverview An AI agent for PDF summarization and key point extraction.
  *
- * - summarizePdf - A function that handles the PDF summarization process.
+ * - summarizePdf - A function that handles the PDF analysis process.
  * - SummarizePdfInput - The input type for the summarizePdf function.
  * - SummarizePdfOutput - The return type for the summarizePdf function.
  */
@@ -17,7 +17,8 @@ const SummarizePdfInputSchema = z.object({
 export type SummarizePdfInput = z.infer<typeof SummarizePdfInputSchema>;
 
 const SummarizePdfOutputSchema = z.object({
-  summary: z.string().describe('A short summary of the PDF content.'),
+  summary: z.string().describe('A concise summary of the PDF content.'),
+  keyPoints: z.array(z.string()).describe('A list of the most important key points from the document.'),
 });
 export type SummarizePdfOutput = z.infer<typeof SummarizePdfOutputSchema>;
 
@@ -29,7 +30,7 @@ const prompt = ai.definePrompt({
   name: 'summarizePdfPrompt',
   input: {schema: SummarizePdfInputSchema},
   output: {schema: SummarizePdfOutputSchema},
-  prompt: `You are an expert summarizer. Please provide a concise summary of the following text from a PDF document:\n\n{{{pdfText}}}`, 
+  prompt: `You are an expert analyst. Please provide a concise summary and a list of the main key points from the following document text:\n\n{{{pdfText}}}`, 
 });
 
 const summarizePdfFlow = ai.defineFlow(
