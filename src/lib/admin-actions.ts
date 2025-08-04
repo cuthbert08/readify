@@ -51,7 +51,7 @@ export async function getAllDocuments(): Promise<Document[]> {
     const docs = await kv.mget<Document[]>(...docKeys);
     
     return docs
-      .filter((d): d is Document => d !== null)
+      .filter((d): d is Document => d !== null && d.id !== undefined && d.fileName !== undefined)
       .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 }
 
