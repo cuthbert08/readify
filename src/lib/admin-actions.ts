@@ -30,33 +30,14 @@ async function checkAdmin() {
   }
 }
 
-// Helper to safely parse KV values which might be objects or strings
-function parseKvObject<T>(item: T | string | null): T | null {
-    if (item === null) return null;
-    // Attempt to parse if it's a string, this handles double-stringified JSON
-    if (typeof item === 'string') {
-        try {
-            return JSON.parse(item);
-        } catch (e) {
-            // If parsing fails, it might not be a JSON string, return null or handle as needed
-            console.error("Failed to parse KV item, it might be a raw string or corrupted:", item);
-            return null;
-        }
-    }
-    // If it's already an object, return it directly
-    return item;
-}
-
-
 export async function getAllUsers(): Promise<User[]> {
   await checkAdmin();
   const userKeys = await kv.keys('user-by-id:*');
   if (userKeys.length === 0) return [];
 
-  const usersRaw = await kv.mget<(User | string)[]>(...userKeys);
+  const users = await kv.mget<User[]>(...userKeys);
 
-  return usersRaw
-    .map(parseKvObject)
+  return users
     .filter((u): u is User => u !== null)
     .sort((a, b) => b.createdAt - a.createdAt);
 }
@@ -66,10 +47,9 @@ export async function getAllDocuments(): Promise<Document[]> {
   const docKeys = await kv.keys('doc:*');
   if (docKeys.length === 0) return [];
   
-  const docsRaw = await kv.mget<(Document | string)[]>(...docKeys);
+  const docs = await kv.mget<Document[]>(...docKeys);
   
-  return docsRaw
-    .map(parseKvObject)
+  return docs
     .filter((d): d is Document => d !== null)
     .sort((a, b) => b.createdAt - a.createdAt);
 }
@@ -78,11 +58,9 @@ export async function getAllDocuments(): Promise<Document[]> {
 export async function deleteUser(userId: string) {
   await checkAdmin();
   
-  const userRaw = await kv.get(`user-by-id:${userId}`);
-  if (!userRaw) throw new Error('User not found');
-  const user = parseKvObject<User>(userRaw);
+  const user = await kv.get<User>(`user-by-id:${userId}`);
+  if (!user) throw new Error('User not found');
 
-  if (!user) throw new Error('User data is corrupted');
   if (user.isAdmin) throw new Error('Cannot delete an admin user.');
 
   const docIds = await kv.lrange(`user:${userId}:docs`, 0, -1);
