@@ -3,7 +3,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import * as pdfjsLib from 'pdfjs-dist';
-import type { PDFDocumentProxy } from 'pdfjs-dist/types/src/display/api';
+import type { PDFDocumentProxy, TextItem as PdfTextItem } from 'pdfjs-dist/types/src/display/api';
 import { UploadCloud, FileText, Loader2, LogOut, Save, Library, Download, Bot, Lightbulb, HelpCircle, Cloud, CloudOff, Settings, Menu, Home, BarChart, BookOpenCheck, BrainCircuit, Mic, FastForward, Rewind, Wind, Maximize, Minimize, ZoomIn, ZoomOut } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import PdfViewer from '@/components/pdf-viewer';
@@ -37,7 +37,6 @@ import TextSelectionMenu from '@/components/text-selection-menu';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Textarea } from '@/components/ui/textarea';
 import { Card } from '@/components/ui/card';
-import { generateSpeech } from '@/ai/flows/generate-speech-with-timings';
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
   'pdfjs-dist/build/pdf.worker.min.mjs',
@@ -46,7 +45,13 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
 
 type PdfState = 'idle' | 'loading' | 'loaded' | 'error';
 type ProcessingStage = 'idle' | 'cleaning' | 'generating' | 'syncing' | 'error';
-
+type TextItem = {
+    text: string;
+    transform: number[];
+    width: number;
+    height: number;
+    pageNumber: number;
+};
 type ActiveDocument = {
   id: string | null;
   file: File | null;
@@ -214,7 +219,7 @@ export default function ReadPage() {
           const page = await pdf.getPage(i);
           const content = await page.getTextContent();
           const items = content.items.map(item => {
-            const textItem = item as any;
+            const textItem = item as PdfTextItem;
     
             return {
               text: textItem.str,
@@ -370,7 +375,13 @@ export default function ReadPage() {
         const { cleanedText } = await cleanPdfText({ rawText: documentText });
 
         if (!cleanedText || !cleanedText.trim()) {
-            throw new Error("No readable content found in the document after cleaning.");
+            toast({ 
+                variant: "destructive", 
+                title: "Content Error", 
+                description: "No readable content found in the document to generate audio." 
+            });
+            setProcessingStage('idle');
+            return;
         }
         
         setProcessingStage('generating');
@@ -451,7 +462,7 @@ export default function ReadPage() {
         setIsSynthesizing(true);
         setSynthesisAudioUrl(null);
         try {
-            const result = await generateSpeech({
+            const result = await generateSpeechWithTimings({
                 text: synthesisText,
                 voice: synthesisVoice as any,
                 speakingRate: synthesisRate
