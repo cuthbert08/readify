@@ -29,8 +29,10 @@ import { Slider } from '@/components/ui/slider';
 import { Volume2 } from 'lucide-react';
 import { useMediaQuery } from '@/hooks/use-media-query';
 
-
-pdfjsLib.GlobalWorkerOptions.workerSrc = '/pdf.worker.mjs';
+pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
+  'pdfjs-dist/build/pdf.worker.min.mjs',
+  import.meta.url,
+).toString();
 
 type PdfState = 'idle' | 'loading' | 'loaded' | 'error';
 type ActiveDocument = {
@@ -235,7 +237,6 @@ export default function ReadPage() {
     const handleSave = async () => {
         if (!activeDoc) return;
     
-        // A document must either have a file (for new uploads) or an ID (for existing docs)
         if (!activeDoc.file && !activeDoc.id) {
           toast({ variant: "destructive", title: "Save Error", description: "No document data to save." });
           return;
@@ -245,7 +246,6 @@ export default function ReadPage() {
         try {
           let pdfUrl = activeDoc.url;
     
-          // Only upload if there's a new file.
           if (activeDoc.file) {
             const uploadResponse = await fetch('/api/upload', {
               method: 'POST',
@@ -266,7 +266,7 @@ export default function ReadPage() {
           }
     
           const docToSave = {
-            id: activeDoc.id || undefined, // Pass id only if it exists
+            id: activeDoc.id || undefined, 
             fileName: fileName,
             pdfUrl: pdfUrl,
             currentPage: currentPage,
@@ -277,10 +277,8 @@ export default function ReadPage() {
     
           const savedDoc = await saveDocument(docToSave);
     
-          // Update the active document state to reflect the saved state
           setActiveDoc(prev => prev ? { ...prev, id: savedDoc.id, file: null, url: savedDoc.pdfUrl, audioUrl: savedDoc.audioUrl } : null);
         
-          // Refresh the user's document list in the sidebar
           await fetchUserDocuments(); 
     
           toast({ title: "Success", description: "Document saved successfully." });
@@ -717,3 +715,5 @@ export default function ReadPage() {
       </TooltipProvider>
     );
 }
+
+    
