@@ -671,6 +671,7 @@ export default function ReadPage() {
                         isSpeaking={isSpeaking}
                         isGeneratingSpeech={isGeneratingSpeech}
                         onPlayPause={handlePlayPause}
+                        canPlay={!!documentText}
                         isFullScreen={isFullScreen}
                         onFullScreen={toggleFullScreen}
                         zoomLevel={zoomLevel}
