@@ -388,67 +388,27 @@ export default function ReadPage() {
         }
         
         setProcessingStage('generating');
-        const flow = generateSpeechWithTimingsFlow({ 
-            text: cleanedText, 
-            voice: selectedVoice as any,
-            speakingRate: speakingRate,
+        const result = await generateSpeechWithTimingsFlow({
+          text: cleanedText,
+          voice: selectedVoice as any,
+          speakingRate: speakingRate,
         });
 
-        const audio = audioRef.current;
-        if (!audio) throw new Error("Audio element not available.");
-
-        const mediaSource = new MediaSource();
-        audio.src = URL.createObjectURL(mediaSource);
-
-        mediaSource.addEventListener('sourceopen', async () => {
-            const sourceBuffer = mediaSource.addSourceBuffer('audio/mpeg');
-            
-            setIsSpeaking(true);
-            audio.play();
-
-            try {
-                for await (const chunk of flow.stream()) {
-                    if (chunk.audioDataUri) {
-                        const base64Data = chunk.audioDataUri.split(',')[1];
-                        const binaryData = atob(base64Data);
-                        const len = binaryData.length;
-                        const bytes = new Uint8Array(len);
-                        for (let i = 0; i < len; i++) {
-                            bytes[i] = binaryData.charCodeAt(i);
-                        }
-                        
-                        const appendBuffer = () => {
-                            if (!sourceBuffer.updating) {
-                                sourceBuffer.appendBuffer(bytes.buffer);
-                            } else {
-                                sourceBuffer.addEventListener('updateend', () => appendBuffer(), { once: true });
-                            }
-                        };
-                        appendBuffer();
-                    }
-                }
-            } catch(e) {
-                console.error("Error processing stream", e);
-                const errorMessage = e instanceof Error ? e.message : "An unknown error occurred";
-                toast({ variant: "destructive", title: "Audio Stream Error", description: `Could not play audio stream. ${errorMessage}` });
-            } finally {
-                if (!sourceBuffer.updating) {
-                    mediaSource.endOfStream();
-                } else {
-                    sourceBuffer.addEventListener('updateend', () => mediaSource.endOfStream(), { once: true });
-                }
-            }
-        });
-
-        setProcessingStage('syncing');
-        const finalResult = await flow.result();
-
-        if (!finalResult.audioDataUri) {
+        if (!result.audioDataUri) {
           throw new Error('Audio generation failed to return data.');
         }
 
-        setActiveDoc(prev => prev ? { ...prev, audioUrl: finalResult.audioDataUri, words: finalResult.words } : null);
-        await handleSaveAfterAudio(finalResult.audioDataUri, finalResult.words);
+        setProcessingStage('syncing');
+
+        if (audioRef.current) {
+          audioRef.current.src = result.audioDataUri;
+          audioRef.current.play();
+          setIsSpeaking(true);
+        }
+
+        setActiveDoc(prev => prev ? { ...prev, audioUrl: result.audioDataUri, words: result.words } : null);
+        await handleSaveAfterAudio(result.audioDataUri, result.words);
+        
         setProcessingStage('idle');
 
       } catch (error) {
@@ -505,12 +465,11 @@ export default function ReadPage() {
         setIsSynthesizing(true);
         setSynthesisAudioUrl(null);
         try {
-            const flow = generateSpeechWithTimingsFlow({
+            const result = await generateSpeechWithTimingsFlow({
                 text: synthesisText,
                 voice: synthesisVoice as any,
                 speakingRate: synthesisRate
             });
-            const result = await flow.result();
             if (result.audioDataUri) {
                 setSynthesisAudioUrl(result.audioDataUri);
             }
@@ -536,14 +495,14 @@ export default function ReadPage() {
     };
     
     const handleForward = () => {
-      if (audioRef.current && audioDuration > 0) {
-        const newTime = Math.min(audioRef.current.currentTime + 10, audioDuration);
+      if (audioRef.current && audioRef.current.duration > 0) {
+        const newTime = Math.min(audioRef.current.currentTime + 10, audioRef.current.duration);
         handleSeek(newTime);
       }
     };
     
     const handleRewind = () => {
-      if (audioRef.current && audioDuration > 0) {
+      if (audioRef.current && audioRef.current.duration > 0) {
         const newTime = Math.max(audioRef.current.currentTime - 10, 0);
         handleSeek(newTime);
       }

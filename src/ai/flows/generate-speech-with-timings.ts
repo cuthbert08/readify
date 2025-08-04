@@ -5,7 +5,7 @@
  * @fileOverview An advanced text-to-speech AI agent using OpenAI.
  * This flow generates audio and provides precise word-level timing information.
  *
- * - generateSpeechWithTimings - A function that handles the text-to-speech process.
+ * - generateSpeechWithTimingsFlow - A function that handles the text-to-speech process.
  */
 import { ai } from '@/ai/genkit';
 import { GenerateSpeechWithTimingsInputSchema, GenerateSpeechWithTimingsOutputSchema } from '@/ai/schemas';
@@ -17,9 +17,8 @@ export const generateSpeechWithTimingsFlow = ai.defineFlow(
     name: 'generateSpeechWithTimingsFlow',
     inputSchema: GenerateSpeechWithTimingsInputSchema,
     outputSchema: GenerateSpeechWithTimingsOutputSchema,
-    stream: GenerateSpeechWithTimingsOutputSchema,
   },
-  async (input, stream) => {
+  async (input) => {
     
     if (!input.text || !input.text.trim()) {
         throw new Error("Input text cannot be empty.");
@@ -64,9 +63,6 @@ export const generateSpeechWithTimingsFlow = ai.defineFlow(
             audioDataUri: audioDataUri,
             words: timingData.words,
         };
-
-        // Stream the final result chunk
-        stream.chunk(result);
 
         return result;
 
