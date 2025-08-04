@@ -8,10 +8,12 @@
  */
 import { ai } from '@/ai/genkit';
 import { GenerateSpeechWithTimingsInputSchema, GenerateSpeechWithTimingsOutputSchema } from '@/ai/schemas';
+import { z } from 'genkit';
 
-export const generateSpeechWithTimings = ai.defineFlow(
+
+export const generateSpeechWithTimingsFlow = ai.defineFlow(
   {
-    name: 'generateSpeechWithTimings',
+    name: 'generateSpeechWithTimingsFlow',
     inputSchema: GenerateSpeechWithTimingsInputSchema,
     outputSchema: GenerateSpeechWithTimingsOutputSchema,
   },
@@ -28,7 +30,8 @@ export const generateSpeechWithTimings = ai.defineFlow(
       config: {
         voice: input.voice,
         speed: input.speakingRate || 1.0,
-        response_format: 'json', // Request JSON to get timing info
+        response_format: 'mp3',
+        timestamp_granularities: ['word'],
       },
       output: {
         format: 'url'
@@ -39,8 +42,7 @@ export const generateSpeechWithTimings = ai.defineFlow(
         throw new Error('No media URL returned from OpenAI. Check OpenAI API response.');
     }
 
-    // The 'content' part should contain the timing information
-    const timingData = content[0]?.data;
+    const timingData = content.find(part => part.data?.words)?.data;
     if (!timingData || !timingData.words) {
       throw new Error('Word timing information was not returned from the API.');
     }
@@ -67,3 +69,10 @@ export const generateSpeechWithTimings = ai.defineFlow(
     }
   }
 );
+
+
+export async function generateSpeechWithTimings(
+  input: z.infer<typeof GenerateSpeechWithTimingsInputSchema>
+): Promise<z.infer<typeof GenerateSpeechWithTimingsOutputSchema>> {
+  return generateSpeechWithTimingsFlow(input);
+}
