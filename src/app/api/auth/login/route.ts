@@ -25,7 +25,13 @@ export async function POST(req: NextRequest) {
     const expires = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
     const session = await encrypt({ userId: user.id, email: user.email, expires, isAdmin });
 
-    cookies().set('session', session, { expires, httpOnly: true });
+    cookies().set('session', session, { 
+        expires, 
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'strict',
+        path: '/'
+    });
 
     return NextResponse.json({ success: true, isAdmin }, { status: 200 });
   } catch (error) {
