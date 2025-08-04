@@ -50,14 +50,16 @@ export const generateSpeech = ai.defineFlow(
             // @ts-ignore - The model supports this parameter
             "responseMimeType": "audio/wav",
             "responseRequestedAudioEncoding": "LINEAR16",
+        },
+        custom: {
             "textToSpeech": {
                 "enableTimepoints": true,
                 "voice": {
-                  "name": `text-to-speech/${input.voice}`
+                  "name": input.voice
                 },
                 "speakingRate": input.speakingRate || 1.0,
             }
-        },
+        }
     });
 
     if (!media) {

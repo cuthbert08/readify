@@ -71,7 +71,7 @@ export default function ReadPage() {
     const [currentSentence, setCurrentSentence] = useState<Sentence | null>(null);
   
     const [availableVoices, setAvailableVoices] = useState<AvailableVoicesOutput>([]);
-    const [selectedVoice, setSelectedVoice] = useState<string>('text-to-speech-en-US-Standard-A');
+    const [selectedVoice, setSelectedVoice] = useState<string>('text-to-speech/en-US-Standard-A');
     const [speakingRate, setSpeakingRate] = useState(1);
     const [playbackRate, setPlaybackRate] = useState(1);
     
@@ -580,7 +580,7 @@ export default function ReadPage() {
                             <Select value={selectedVoice} onValueChange={setSelectedVoice} disabled={isSpeaking || isGeneratingSpeech}>
                                 <SelectTrigger>
                                     <SelectValue>
-                                      {availableVoices.find(v => v.name === selectedVoice)?.name.replace('text-to-speech-en-US-Standard-', '')}
+                                      {availableVoices.find(v => v.name === selectedVoice)?.displayName || selectedVoice}
                                       ({availableVoices.find(v => v.name === selectedVoice)?.gender})
                                     </SelectValue>
                                 </SelectTrigger>
@@ -588,7 +588,7 @@ export default function ReadPage() {
                                     {availableVoices.map((voice) => (
                                     <div key={voice.name} className="flex items-center justify-between pr-2">
                                         <SelectItem value={voice.name} className="flex-1">
-                                            {voice.name.replace('text-to-speech-en-US-Standard-', '')} ({voice.gender})
+                                            {voice.displayName} ({voice.gender})
                                         </SelectItem>
                                         <Button 
                                             variant="ghost" 
