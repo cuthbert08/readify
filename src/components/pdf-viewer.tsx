@@ -1,11 +1,9 @@
 'use client';
 
-import React, { useRef, useEffect, useState, useMemo } from 'react';
+import React, { useRef, useEffect, useState } from 'react';
 import type { PDFDocumentProxy, PDFPageProxy } from 'pdfjs-dist/types/src/display/api';
-import type { TextItem as PdfTextItem, TextContent } from 'pdfjs-dist/types/src/display/api';
-import * as pdfjsLib from 'pdfjs-dist';
+import type { TextItem as PdfTextItem } from 'pdfjs-dist/types/src/display/api';
 import { Skeleton } from './ui/skeleton';
-import { cn } from '@/lib/utils';
 import type { Sentence } from '@/ai/schemas';
 
 export type TextItem = {
@@ -34,6 +32,7 @@ const PageCanvas: React.FC<{
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const textLayerRef = useRef<HTMLDivElement>(null);
   const [isRendered, setIsRendered] = useState(false);
+  const [textLayerItems, setTextLayerItems] = useState<React.ReactNode[]>([]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -54,16 +53,25 @@ const PageCanvas: React.FC<{
     let renderTask = page.render(renderContext);
     renderTask.promise.then(async () => {
         setIsRendered(true);
-        // Render text layer
         if (textLayerRef.current) {
             const textContent = await page.getTextContent();
-            textLayerRef.current.innerHTML = ''; // Clear previous text layer
-            pdfjsLib.renderTextLayer({
-                textContentSource: textContent,
-                container: textLayerRef.current,
-                viewport: viewport,
-                textDivs: []
+            const textLayerSpans = textContent.items.map((item, index) => {
+                const textItem = item as PdfTextItem;
+                const style: React.CSSProperties = {
+                    left: `${textItem.transform[4]}px`,
+                    top: `${textItem.transform[5]}px`,
+                    height: `${textItem.height}px`,
+                    width: `${textItem.width}px`,
+                    transform: `scale(${textItem.transform[0]}, ${textItem.transform[3]})`,
+                    position: 'absolute',
+                    opacity: 0.2,
+                    transformOrigin: '0% 0%',
+                    color: 'transparent',
+                    WebkitFontSmoothing: 'antialiased',
+                };
+                return <span key={index} style={style}>{textItem.str}</span>;
             });
+            setTextLayerItems(textLayerSpans);
         }
     });
 
@@ -95,18 +103,16 @@ const PageCanvas: React.FC<{
     const itemsInSentence: TextItem[] = [];
     let remainingSentence = sentenceText;
     
-    const fullText = allTextItems.map(i => i.text).join('');
-    const startIndex = fullText.indexOf(sentenceText);
+    const allTextOnPage = textItems.map(i => i.text).join('');
+    const startIndex = allTextOnPage.indexOf(sentenceText);
 
     if (startIndex === -1) return [];
 
     let charCount = 0;
     let sentenceItems: TextItem[] = [];
-    for(const item of allTextItems) {
+    for(const item of textItems) {
         if(charCount + item.text.length > startIndex && charCount < startIndex + sentenceText.length) {
-            if (item.pageNumber === page.pageNumber) {
-                sentenceItems.push(item);
-            }
+            sentenceItems.push(item);
         }
         charCount += item.text.length;
     }
@@ -143,7 +149,7 @@ const PageCanvas: React.FC<{
         <canvas ref={canvasRef} />
         {isRendered && (
              <div ref={textLayerRef} className="absolute inset-0 textLayer" onMouseUp={handleMouseUp}>
-                {/* Text layer content is now rendered by pdfjsLib.renderTextLayer */}
+                {textLayerItems}
              </div>
         )}
         {getHighlightBoxes().map((style, i) => <div key={i} style={style} />)}

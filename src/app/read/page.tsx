@@ -300,7 +300,7 @@ export default function ReadPage() {
     
           const savedDoc = await saveDocument(docToSave);
     
-          setActiveDoc(prev => prev ? { ...prev, id: savedDoc.id, file: null, url: savedDoc.pdfUrl, audioUrl: savedDoc.audioUrl, sentences: savedDoc.sentences } : null);
+          setActiveDoc(prev => prev ? { ...prev, id: savedDoc.id, file: null, url: savedDoc.pdfUrl, audioUrl: savedDoc.audioUrl, sentences: savedDoc.sentences as Sentence[] } : null);
         
           await fetchUserDocuments(); 
     
@@ -785,5 +785,3 @@ export default function ReadPage() {
       </TooltipProvider>
     );
 }
-
-    
