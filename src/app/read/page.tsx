@@ -59,9 +59,8 @@ export default function ReadPage() {
     const [generatedAudioUrl, setGeneratedAudioUrl] = useState<string | null>(null);
   
     const [availableVoices, setAvailableVoices] = useState<AvailableVoicesOutput>([]);
-    const [selectedVoice, setSelectedVoice] = useState<string>('Algenib');
+    const [selectedVoice, setSelectedVoice] = useState<string>('alloy');
     const [speakingRate, setSpeakingRate] = useState(1);
-    const [pitch, setPitch] = useState(0);
     const [playbackRate, setPlaybackRate] = useState(1);
     
     const [userDocuments, setUserDocuments] = useState<Document[]>([]);
@@ -299,7 +298,6 @@ export default function ReadPage() {
             text: documentText, 
             voice: selectedVoice,
             speakingRate: speakingRate,
-            pitch: pitch
         });
         setIsGeneratingSpeech(false);
   
@@ -509,11 +507,7 @@ export default function ReadPage() {
                         </div>
                         <div className='space-y-2'>
                             <Label htmlFor="speaking-rate">Speaking Rate: {speakingRate.toFixed(2)}x</Label>
-                            <Slider id="speaking-rate" min={0.25} max={4.0} step={0.25} value={[speakingRate]} onValueChange={(v) => setSpeakingRate(v[0])} disabled={isSpeaking || isGeneratingSpeech} />
-                        </div>
-                        <div className='space-y-2'>
-                            <Label htmlFor="pitch">Pitch: {pitch.toFixed(1)}</Label>
-                            <Slider id="pitch" min={-20} max={20} step={0.5} value={[pitch]} onValueChange={(v) => setPitch(v[0])} disabled={isSpeaking || isGeneratingSpeech}/>
+                            <Slider id="speaking-rate" min={0.25} max={3.0} step={0.25} value={[speakingRate]} onValueChange={(v) => setSpeakingRate(v[0])} disabled={isSpeaking || isGeneratingSpeech} />
                         </div>
                     </div>
                   </div>
@@ -558,10 +552,10 @@ export default function ReadPage() {
                             </TooltipTrigger>
                             <TooltipContent><p>{fileName}</p></TooltipContent>
                          </Tooltip>
-                          <Tooltip>
+                         <Tooltip>
                             <TooltipTrigger asChild>
-                                <Button variant="ghost" size="icon" className="h-7 w-7" onClick={handleSave} disabled={isSaving}>
-                                    {isSaving ? <Loader2 className="h-4 w-4 animate-spin"/> : <CloudOff className="h-4 w-4 text-muted-foreground" />}
+                                 <Button variant="ghost" size="icon" className="h-7 w-7" onClick={handleSave} disabled={isSaving}>
+                                    {isSaving ? <Loader2 className="h-4 w-4 animate-spin"/> : <CloudOff className="h-4 w-4 text-destructive" />}
                                 </Button>
                             </TooltipTrigger>
                             <TooltipContent>
@@ -641,7 +635,7 @@ export default function ReadPage() {
                         onPlaybackRateChange={setPlaybackRate}
                         showDownload={!!generatedAudioUrl}
                         downloadUrl={generatedAudioUrl || ''}
-                        downloadFileName={`${fileName || 'audio'}.wav`}
+                        downloadFileName={`${fileName || 'audio'}.mp3`}
                     />
                 </div>
             )}
