@@ -19,7 +19,6 @@ export type GenerateSpeechOutput = z.infer<typeof GenerateSpeechOutputSchema>;
 // Schema for previewing a selected voice
 export const PreviewSpeechInputSchema = z.object({
     voice: validVoices.describe('The voice to use for the speech synthesis.'),
-    apiKey: z.string().optional().describe('An optional OpenAI API key to use for this specific request.'),
 });
 export type PreviewSpeechInput = z.infer<typeof PreviewSpeechInputSchema>;
 
