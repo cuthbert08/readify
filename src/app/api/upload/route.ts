@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { put } from '@vercel/blob';
 import { getSession } from '@/lib/session';
+import { randomUUID } from 'crypto';
 
 export async function POST(request: NextRequest) {
   const session = await getSession();
@@ -8,14 +9,14 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ message: 'Unauthorized' }, { status: 401 });
   }
 
-  const filename = request.headers.get('x-vercel-filename');
-  if (!filename) {
+  const originalFilename = request.headers.get('x-vercel-filename');
+  if (!originalFilename) {
     return NextResponse.json(
       { message: 'Filename is missing' },
       { status: 400 }
     );
   }
-
+  
   if (!request.body) {
     return NextResponse.json(
       { message: 'Request body is missing' },
@@ -23,12 +24,12 @@ export async function POST(request: NextRequest) {
     );
   }
   
-  const blobName = `${session.userId}/${filename}`;
+  const blobName = `${session.userId}/${randomUUID()}-${originalFilename}`;
 
   try {
     const blob = await put(blobName, request.body, {
       access: 'public',
-      addRandomSuffix: false,
+      addRandomSuffix: false, // We've added a UUID, so this isn't needed
     });
 
     return NextResponse.json(blob);
