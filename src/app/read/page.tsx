@@ -58,6 +58,9 @@ export default function ReadPage() {
     const [isSpeaking, setIsSpeaking] = useState(false);
     const [isGeneratingSpeech, setIsGeneratingSpeech] = useState(false);
     const [generatedAudioUrl, setGeneratedAudioUrl] = useState<string | null>(null);
+    const [audioProgress, setAudioProgress] = useState(0);
+    const [audioDuration, setAudioDuration] = useState(0);
+    const [audioCurrentTime, setAudioCurrentTime] = useState(0);
   
     const [availableVoices, setAvailableVoices] = useState<AvailableVoicesOutput>([]);
     const [selectedVoice, setSelectedVoice] = useState<string>('alloy');
@@ -230,48 +233,68 @@ export default function ReadPage() {
     }
   
     const handleSave = async () => {
-      if (!activeDoc || (!activeDoc.file && !activeDoc.id)) return;
+      if (!activeDoc) return;
+    
+      // A document must either have a file (for new uploads) or an ID (for existing docs)
+      if (!activeDoc.file && !activeDoc.id) {
+        toast({ variant: "destructive", title: "Save Error", description: "No document data to save." });
+        return;
+      }
+    
       setIsSaving(true);
       try {
         let pdfUrl = activeDoc.url;
-  
-        if(activeDoc.file) {
+    
+        // Only upload if there's a new file.
+        if (activeDoc.file) {
           const uploadResponse = await fetch('/api/upload', {
             method: 'POST',
             headers: { 'Content-Type': 'application/pdf', 'x-vercel-filename': activeDoc.file.name },
             body: activeDoc.file,
           });
-  
-          if (!uploadResponse.ok) throw new Error('PDF Upload failed');
+    
+          if (!uploadResponse.ok) {
+            const errorData = await uploadResponse.json();
+            throw new Error(errorData.message || 'PDF Upload failed');
+          }
           const blob = await uploadResponse.json();
           pdfUrl = blob.url;
         }
         
-        if (!pdfUrl) throw new Error("Could not get PDF URL");
-  
-        const newDocData: any = {
+        if (!pdfUrl) {
+          throw new Error("Could not determine PDF URL for saving.");
+        }
+    
+        const docToSave = {
+          id: activeDoc.id || undefined, // Pass id only if it exists
           fileName: fileName,
           pdfUrl: pdfUrl,
           currentPage: currentPage,
           totalPages: totalPages,
-          zoomLevel: zoomLevel
+          zoomLevel: zoomLevel,
+          audioUrl: generatedAudioUrl,
         };
-        if (activeDoc.id) newDocData.id = activeDoc.id;
-        if (generatedAudioUrl) newDocData.audioUrl = generatedAudioUrl;
-  
-        const newDoc = await saveDocument(newDocData);
-  
-        setActiveDoc(prev => prev ? { ...prev, id: newDoc.id, file: null, url: newDoc.pdfUrl, audioUrl: newDoc.audioUrl } : null);
-        await fetchUserDocuments();
-  
+    
+        const savedDoc = await saveDocument(docToSave);
+    
+        // Update the active document state to reflect the saved state
+        setActiveDoc(prev => prev ? { ...prev, id: savedDoc.id, file: null, url: savedDoc.pdfUrl, audioUrl: savedDoc.audioUrl } : null);
+        
+        // Refresh the user's document list in the sidebar
+        await fetchUserDocuments(); 
+    
         toast({ title: "Success", description: "Document saved successfully." });
       } catch (error) {
         console.error('Save error:', error);
-        toast({ variant: "destructive", title: "Save Error", description: "Could not save your document." });
+        toast({ 
+          variant: "destructive", 
+          title: "Save Error", 
+          description: error instanceof Error ? error.message : "Could not save your document." 
+        });
       } finally {
         setIsSaving(false);
       }
-    }
+    };
   
     const handlePlayPause = async () => {
       if (isSpeaking) {
@@ -338,6 +361,27 @@ export default function ReadPage() {
             audioRef.current.playbackRate = playbackRate;
         }
     }, [playbackRate]);
+
+    const handleSeek = (value: number) => {
+      if (audioRef.current) {
+        audioRef.current.currentTime = value;
+        setAudioCurrentTime(value);
+      }
+    };
+    
+    const handleForward = () => {
+      if (audioRef.current) {
+        const newTime = Math.min(audioRef.current.currentTime + 10, audioDuration);
+        handleSeek(newTime);
+      }
+    };
+    
+    const handleRewind = () => {
+      if (audioRef.current) {
+        const newTime = Math.max(audioRef.current.currentTime - 10, 0);
+        handleSeek(newTime);
+      }
+    };
   
     const handleAiAction = async (type: AiDialogType) => {
       if (!documentText) return;
@@ -637,12 +681,27 @@ export default function ReadPage() {
                         showDownload={!!generatedAudioUrl}
                         downloadUrl={generatedAudioUrl || ''}
                         downloadFileName={`${fileName || 'audio'}.mp3`}
+                        progress={audioProgress}
+                        duration={audioDuration}
+                        currentTime={audioCurrentTime}
+                        onSeek={handleSeek}
+                        onForward={handleForward}
+                        onRewind={handleRewind}
                     />
                 </div>
             )}
           </div>
 
-          <audio ref={audioRef} onEnded={() => setIsSpeaking(false)} hidden />
+          <audio 
+            ref={audioRef} 
+            onEnded={() => setIsSpeaking(false)} 
+            onLoadedMetadata={(e) => setAudioDuration(e.currentTarget.duration)}
+            onTimeUpdate={(e) => {
+              setAudioCurrentTime(e.currentTarget.currentTime);
+              setAudioProgress((e.currentTarget.currentTime / audioDuration) * 100);
+            }}
+            hidden 
+          />
           <audio ref={previewAudioRef} hidden />
           <AiDialog
             open={isAiDialogOpen}
