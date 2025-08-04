@@ -59,10 +59,10 @@ export async function generateSpeech(input: GenerateSpeechInput): Promise<Genera
   return ttsFlow(input);
 }
 
-export async function previewSpeech(input: Omit<GenerateSpeechInput, 'text' | 'speakingRate'>): Promise<GenerateSpeechOutput> {
+export async function previewSpeech(input: Omit<GenerateSpeechInput, 'text'>): Promise<GenerateSpeechOutput> {
   return ttsFlow({
     ...input,
     text: "Hello! This is a preview of my voice.",
-    speakingRate: 1.0,
+    speakingRate: input.speakingRate || 1.0,
   });
 }
