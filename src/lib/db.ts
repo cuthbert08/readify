@@ -64,21 +64,20 @@ export async function saveDocument(docData: {
   let docId = docData.id;
 
   if (docId) {
-    const existingDocRaw = await kv.get(`doc:${docId}`);
+    const existingDocRaw: Document | null = await kv.get(`doc:${docId}`);
     if (!existingDocRaw) {
         throw new Error('Document not found.');
     }
-    const existingDoc = existingDocRaw as Document;
     
-    if (existingDoc.userId !== userId) {
+    if (existingDocRaw.userId !== userId) {
       throw new Error('Access denied.');
     }
     const updatedDoc: Document = {
-      ...existingDoc,
+      ...existingDocRaw,
       ...docData,
-      audioUrl: docData.audioUrl !== undefined ? docData.audioUrl : existingDoc.audioUrl,
-      sentences: docData.sentences !== undefined ? docData.sentences : existingDoc.sentences,
-      zoomLevel: docData.zoomLevel !== undefined ? docData.zoomLevel : existingDoc.zoomLevel,
+      audioUrl: docData.audioUrl !== undefined ? docData.audioUrl : existingDocRaw.audioUrl,
+      sentences: docData.sentences !== undefined ? docData.sentences : existingDocRaw.sentences,
+      zoomLevel: docData.zoomLevel !== undefined ? docData.zoomLevel : existingDocRaw.zoomLevel,
     };
     await kv.set(`doc:${docId}`, updatedDoc);
     return updatedDoc;
@@ -123,5 +122,3 @@ export async function getDocuments(): Promise<Document[]> {
     .filter((doc): doc is Document => doc !== null)
     .sort((a,b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 }
-
-    

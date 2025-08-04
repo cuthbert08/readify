@@ -35,6 +35,7 @@ const PageCanvas: React.FC<{
   const pageRef = useRef<HTMLDivElement>(null);
   const [isRendered, setIsRendered] = useState(false);
   const [textLayerItems, setTextLayerItems] = useState<React.ReactNode[]>([]);
+  const highlightRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -57,7 +58,6 @@ const PageCanvas: React.FC<{
         setIsRendered(true);
         if (textLayerRef.current) {
             const textContent = await page.getTextContent();
-            // Manually render text layer for selection
             const textLayerSpans = textContent.items.map((item, index) => {
                 const textItem = item as PdfTextItem;
                 const tx = textItem.transform;
@@ -66,7 +66,7 @@ const PageCanvas: React.FC<{
                     top: `${tx[5]}px`,
                     height: `${textItem.height}px`,
                     width: `${textItem.width}px`,
-                    fontFamily: 'sans-serif', // Should match PDF font if possible
+                    fontFamily: 'sans-serif',
                     fontSize: `${Math.sqrt(tx[0] * tx[0] + tx[1] * tx[1])}px`,
                     transform: `scaleX(${tx[0]})`,
                     position: 'absolute',
@@ -88,11 +88,8 @@ const PageCanvas: React.FC<{
   }, [page, scale]);
 
   useEffect(() => {
-    if (highlightSentence && pageRef.current) {
-        const firstHighlight = highlightContainerRef.current?.querySelector('.highlight-box');
-        if (firstHighlight) {
-            firstHighlight.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        }
+    if (highlightRef.current) {
+        highlightRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
   }, [highlightSentence]);
 
@@ -123,9 +120,7 @@ const PageCanvas: React.FC<{
     let charIndex = startIndex;
     const endIndex = startIndex + sentenceText.length;
     const boxes: React.ReactElement[] = [];
-    let currentWord = '';
-    let currentBox = { left: -1, top: -1, right: -1, bottom: -1, page: -1 };
-
+    
     let textItemIndex = -1;
     let accumulatedLen = 0;
     
@@ -143,50 +138,36 @@ const PageCanvas: React.FC<{
 
     for (let i = textItemIndex; i < textItems.length && charIndex < endIndex; i++) {
         const item = textItems[i];
+        if (!item || !item.text) continue;
         const itemText = item.text;
 
         for (let j = offsetInTextItem; j < itemText.length && charIndex < endIndex; j++) {
-            const char = itemText[j];
-            const isWhitespace = /\s/.test(char);
+            const viewport = page.getViewport({ scale });
+            const [fontSize, , , , left, top] = item.transform;
+            const charWidth = item.width / item.text.length;
 
-            if (!isWhitespace) {
-                const viewport = page.getViewport({ scale });
-                const [fontSize, , , , left, top] = item.transform;
-                const charWidth = item.width / item.text.length; 
+            const boxLeft = left + (j * charWidth);
+            const boxTop = viewport.height - top - item.height;
 
-                const boxLeft = left + (j * charWidth);
-                const boxTop = viewport.height - top - item.height; 
-
-                if (currentBox.left === -1) {
-                    currentBox = { left: boxLeft, top: boxTop, right: boxLeft + charWidth, bottom: boxTop + item.height, page: item.pageNumber };
-                } else {
-                    currentBox.right = boxLeft + charWidth;
-                    currentBox.bottom = Math.max(currentBox.bottom, boxTop + item.height);
-                }
-            }
-
-            if ((isWhitespace || charIndex === endIndex -1) && currentBox.left !== -1) {
-                 boxes.push(
-                    <div
-                        key={`${charIndex}-${i}-${j}`}
-                        className="highlight-box absolute bg-primary/30 rounded-sm"
-                        style={{
-                            left: `${currentBox.left}px`,
-                            top: `${currentBox.top}px`,
-                            width: `${currentBox.right - currentBox.left}px`,
-                            height: `${currentBox.bottom - currentBox.top}px`,
-                        }}
-                    />
-                );
-                currentBox = { left: -1, top: -1, right: -1, bottom: -1, page: -1 };
-            }
+            const box = (
+                 <div
+                    ref={charIndex === startIndex ? highlightRef : null}
+                    key={`${charIndex}-${i}-${j}`}
+                    className="highlight-box absolute bg-primary/30 rounded-sm"
+                    style={{
+                        left: `${boxLeft}px`,
+                        top: `${boxTop}px`,
+                        width: `${charWidth}px`,
+                        height: `${item.height}px`,
+                    }}
+                />
+            );
+            boxes.push(box);
 
             charIndex++;
         }
         offsetInTextItem = 0; 
     }
-
-
     return boxes;
   };
 

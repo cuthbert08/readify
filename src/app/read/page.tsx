@@ -184,6 +184,7 @@ export default function ReadPage() {
       setAiExplanationOutput(null);
       setAiQuizOutput(null);
       setGeneratedAudioUrl(null);
+      setCurrentSentence(null);
   
       try {
         const loadingTask = pdfjsLib.getDocument(typeof source === 'string' ? { url: source } : { data: await source.arrayBuffer() });
@@ -270,7 +271,7 @@ export default function ReadPage() {
       await loadPdf(doc.pdfUrl, doc.id, doc);
     }
   
-    const handleSave = async () => {
+    const handleSaveAfterAudio = async (audioUrl: string, sentences: Sentence[]) => {
         if (!activeDoc || !activeDoc.doc) return;
     
         if (!activeDoc.file && !activeDoc.id) {
@@ -282,6 +283,7 @@ export default function ReadPage() {
         try {
           let pdfUrl = activeDoc.url;
     
+          // If the doc is from a local file, upload it first
           if (activeDoc.file) {
             const uploadResponse = await fetch('/api/upload', {
               method: 'POST',
@@ -306,8 +308,8 @@ export default function ReadPage() {
             fileName: fileName,
             pdfUrl: pdfUrl,
             zoomLevel: zoomLevel,
-            audioUrl: generatedAudioUrl,
-            sentences: activeDoc.sentences || null,
+            audioUrl: audioUrl,
+            sentences: sentences,
           };
     
           const savedDoc = await saveDocument(docToSave);
@@ -316,7 +318,7 @@ export default function ReadPage() {
         
           await fetchUserDocuments(); 
     
-          toast({ title: "Success", description: "Document saved successfully." });
+          toast({ title: "Success", description: "Document and audio saved successfully." });
         } catch (error) {
           console.error('Save error:', error);
           toast({ 
@@ -364,6 +366,8 @@ export default function ReadPage() {
           audioRef.current.src = result.audioDataUri;
           audioRef.current.play();
           setIsSpeaking(true);
+          // Auto-save after successful generation
+          await handleSaveAfterAudio(result.audioDataUri, result.sentences);
         } else {
           throw new Error('Audio generation failed.');
         }
@@ -701,12 +705,12 @@ export default function ReadPage() {
                          </Tooltip>
                          <Tooltip>
                             <TooltipTrigger asChild>
-                                 <Button variant="ghost" size="icon" className="h-7 w-7" onClick={handleSave} disabled={isSaving}>
-                                    {isSaving ? <Loader2 className="h-4 w-4 animate-spin"/> : <CloudOff className="h-4 w-4 text-destructive" />}
+                                 <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => isGeneratingSpeech || handlePlayPause()} disabled={isSaving || isGeneratingSpeech}>
+                                    {isSaving || isGeneratingSpeech ? <Loader2 className="h-4 w-4 animate-spin"/> : <CloudOff className="h-4 w-4 text-destructive" />}
                                 </Button>
                             </TooltipTrigger>
                             <TooltipContent>
-                                <p>Not saved. Click to save to cloud.</p>
+                                <p>Not saved. Generate audio to save to cloud.</p>
                             </TooltipContent>
                         </Tooltip>
                       </div>
@@ -833,5 +837,3 @@ export default function ReadPage() {
       </TooltipProvider>
     );
 }
-
-    
