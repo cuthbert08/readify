@@ -3,25 +3,11 @@
  * @fileOverview A text-to-speech AI agent for previewing voices.
  *
  * - previewSpeech - A function that handles the voice preview generation.
- * - PreviewSpeechInput - The input type for the previewSpeech function.
- * - PreviewSpeechOutput - The return type for the previewSpeech function.
  */
 
 import { ai } from '@/ai/genkit';
-import { z } from 'genkit';
 import { openAI } from 'genkitx-openai';
-
-const validVoices = z.enum(['alloy', 'echo', 'fable', 'onyx', 'nova', 'shimmer']);
-
-export const PreviewSpeechInputSchema = z.object({
-  voice: validVoices.describe('The voice to use for the speech synthesis.'),
-});
-export type PreviewSpeechInput = z.infer<typeof PreviewSpeechInputSchema>;
-
-export const PreviewSpeechOutputSchema = z.object({
-  audioDataUri: z.string().describe("A data URI of the generated audio file. Expected format: 'data:audio/mp3;base64,<encoded_data>'."),
-});
-export type PreviewSpeechOutput = z.infer<typeof PreviewSpeechOutputSchema>;
+import { PreviewSpeechInputSchema, PreviewSpeechOutputSchema } from '@/ai/schemas';
 
 export const previewSpeech = ai.defineFlow(
   {
@@ -36,6 +22,7 @@ export const previewSpeech = ai.defineFlow(
       config: {
         voice: input.voice,
         speed: 1.0,
+        response_format: 'mp3',
       },
       output: {
         format: 'url'

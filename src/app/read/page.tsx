@@ -297,7 +297,7 @@ export default function ReadPage() {
         setIsGeneratingSpeech(true);
         const result = await generateSpeech({ 
             text: documentText, 
-            voice: selectedVoice as any,
+            voice: selectedVoice,
             speakingRate: speakingRate,
         });
         setIsGeneratingSpeech(false);
@@ -323,7 +323,7 @@ export default function ReadPage() {
     const handlePreviewVoice = async (voice: string) => {
       try {
         const result = await previewSpeech({ 
-          voice: voice as any
+          voice: voice
         });
         if (result.audioDataUri && previewAudioRef.current) {
           previewAudioRef.current.src = result.audioDataUri;
@@ -663,4 +663,5 @@ export default function ReadPage() {
     
 
     
+
 
