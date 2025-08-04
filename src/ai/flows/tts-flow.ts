@@ -33,9 +33,9 @@ const GenerateSpeechOutputSchema = z.object({
 export type GenerateSpeechOutput = z.infer<typeof GenerateSpeechOutputSchema>;
 
 
-export const generateSpeech = ai.defineFlow(
+const ttsFlow = ai.defineFlow(
   {
-    name: 'generateSpeech',
+    name: 'ttsFlow',
     inputSchema: GenerateSpeechInputSchema,
     outputSchema: GenerateSpeechOutputSchema,
   },
@@ -52,28 +52,40 @@ export const generateSpeech = ai.defineFlow(
       }
     });
 
-    if (!media) {
-      throw new Error('no media returned');
+    if (!media || !media.url) {
+        throw new Error('No media URL returned from OpenAI. Check OpenAI API response.');
     }
 
-    return {
-      audioDataUri: media.url,
-    };
+    // The URL from OpenAI is temporary. We must fetch it and convert to a data URI.
+    try {
+        const audioResponse = await fetch(media.url);
+        if (!audioResponse.ok) {
+            throw new Error(`Failed to fetch audio from OpenAI URL: ${audioResponse.statusText} (Status: ${audioResponse.status})`);
+        }
+
+        const audioBuffer = await audioResponse.arrayBuffer();
+        const base64Audio = Buffer.from(audioBuffer).toString('base64');
+        const audioDataUri = `data:audio/mp3;base64,${base64Audio}`;
+
+        return {
+            audioDataUri: audioDataUri,
+        };
+    } catch (fetchError: any) {
+        console.error("Error fetching or processing audio from OpenAI URL:", fetchError);
+        throw new Error(`Could not process audio: ${fetchError.message}`);
+    }
   }
 );
 
 
-export const previewSpeech = ai.defineFlow(
-    {
-        name: 'previewSpeech',
-        inputSchema: PreviewSpeechInputSchema,
-        outputSchema: GenerateSpeechOutputSchema,
-    },
-    async (input) => {
-        return generateSpeech({
-            text: "Hello! This is a preview of my voice.",
-            voice: input.voice,
-            speakingRate: 1.0
-        })
-    }
-);
+export async function generateSpeech(input: GenerateSpeechInput): Promise<GenerateSpeechOutput> {
+  return ttsFlow(input);
+}
+
+export async function previewSpeech(input: PreviewSpeechInput): Promise<GenerateSpeechOutput> {
+    return ttsFlow({
+        text: "Hello! This is a preview of my voice.",
+        voice: input.voice,
+        speakingRate: 1.0
+    })
+}
