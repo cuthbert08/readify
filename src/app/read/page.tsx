@@ -12,7 +12,8 @@ import { useToast } from "@/hooks/use-toast";
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { getAvailableVoices, AvailableVoicesOutput } from '@/ai/flows/voice-selection';
-import { generateSpeech, previewSpeech } from '@/ai/flows/tts-flow';
+import { generateSpeech } from '@/ai/flows/tts-flow';
+import { previewSpeech } from '@/ai/flows/preview-speech';
 import { summarizePdf, SummarizePdfOutput } from '@/ai/flows/summarize-pdf';
 import { chatWithPdf, ChatWithPdfOutput } from '@/ai/flows/chat-with-pdf';
 import { Sidebar, SidebarHeader, SidebarMenu, SidebarMenuItem, SidebarMenuButton, SidebarFooter, SidebarContent } from '@/components/ui/sidebar';
@@ -294,17 +295,17 @@ export default function ReadPage() {
   
       try {
         setIsGeneratingSpeech(true);
-        const { audioDataUri } = await generateSpeech({ 
+        const result = await generateSpeech({ 
             text: documentText, 
-            voice: selectedVoice,
+            voice: selectedVoice as any,
             speakingRate: speakingRate,
         });
         setIsGeneratingSpeech(false);
   
-        if (audioDataUri && audioRef.current) {
-          setGeneratedAudioUrl(audioDataUri);
-          setActiveDoc(prev => prev ? { ...prev, audioUrl: audioDataUri } : null);
-          audioRef.current.src = audioDataUri;
+        if (result.audioDataUri && audioRef.current) {
+          setGeneratedAudioUrl(result.audioDataUri);
+          setActiveDoc(prev => prev ? { ...prev, audioUrl: result.audioDataUri } : null);
+          audioRef.current.src = result.audioDataUri;
           audioRef.current.play();
           setIsSpeaking(true);
         } else {
@@ -321,11 +322,11 @@ export default function ReadPage() {
   
     const handlePreviewVoice = async (voice: string) => {
       try {
-        const { audioDataUri } = await previewSpeech({ 
+        const result = await previewSpeech({ 
           voice: voice as any
         });
-        if (audioDataUri && previewAudioRef.current) {
-          previewAudioRef.current.src = audioDataUri;
+        if (result.audioDataUri && previewAudioRef.current) {
+          previewAudioRef.current.src = result.audioDataUri;
           previewAudioRef.current.play();
         }
       } catch (error) {
@@ -662,3 +663,4 @@ export default function ReadPage() {
     
 
     
+

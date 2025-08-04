@@ -1,10 +1,10 @@
 'use server';
 /**
- * @fileOverview A text-to-speech AI agent using OpenAI.
+ * @fileOverview A text-to-speech AI agent for previewing voices.
  *
- * - generateSpeech - A function that handles the text-to-speech process.
- * - GenerateSpeechInput - The input type for the generateSpeech function.
- * - GenerateSpeechOutput - The return type for the generateSpeech function.
+ * - previewSpeech - A function that handles the voice preview generation.
+ * - PreviewSpeechInput - The input type for the previewSpeech function.
+ * - PreviewSpeechOutput - The return type for the previewSpeech function.
  */
 
 import { ai } from '@/ai/genkit';
@@ -13,31 +13,29 @@ import { openAI } from 'genkitx-openai';
 
 const validVoices = z.enum(['alloy', 'echo', 'fable', 'onyx', 'nova', 'shimmer']);
 
-export const GenerateSpeechInputSchema = z.object({
-  text: z.string().describe('The text to be converted to speech.'),
+export const PreviewSpeechInputSchema = z.object({
   voice: validVoices.describe('The voice to use for the speech synthesis.'),
-  speakingRate: z.number().min(0.25).max(3.0).optional().describe('The speaking rate, where 1.0 is the normal speed.'),
 });
-export type GenerateSpeechInput = z.infer<typeof GenerateSpeechInputSchema>;
+export type PreviewSpeechInput = z.infer<typeof PreviewSpeechInputSchema>;
 
-export const GenerateSpeechOutputSchema = z.object({
+export const PreviewSpeechOutputSchema = z.object({
   audioDataUri: z.string().describe("A data URI of the generated audio file. Expected format: 'data:audio/mp3;base64,<encoded_data>'."),
 });
-export type GenerateSpeechOutput = z.infer<typeof GenerateSpeechOutputSchema>;
+export type PreviewSpeechOutput = z.infer<typeof PreviewSpeechOutputSchema>;
 
-export const generateSpeech = ai.defineFlow(
+export const previewSpeech = ai.defineFlow(
   {
-    name: 'generateSpeech',
-    inputSchema: GenerateSpeechInputSchema,
-    outputSchema: GenerateSpeechOutputSchema,
+    name: 'previewSpeech',
+    inputSchema: PreviewSpeechInputSchema,
+    outputSchema: PreviewSpeechOutputSchema,
   },
   async (input) => {
     const { media } = await ai.generate({
       model: openAI.model('tts-1'),
-      prompt: input.text,
+      prompt: "Hello! This is a preview of my voice.",
       config: {
         voice: input.voice,
-        speed: input.speakingRate || 1.0,
+        speed: 1.0,
       },
       output: {
         format: 'url'
@@ -47,7 +45,7 @@ export const generateSpeech = ai.defineFlow(
     if (!media || !media.url) {
         throw new Error('No media URL returned from OpenAI. Check OpenAI API response.');
     }
-    
+
     try {
         const audioResponse = await fetch(media.url);
         if (!audioResponse.ok) {
