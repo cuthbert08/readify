@@ -146,10 +146,14 @@ export default function ReadPage() {
     setLoadingProgress(0);
 
     try {
-      const response = await fetch('/api/upload', {
+       const response = await fetch('/api/upload', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ filename: file.name }),
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          filename: file.name,
+        }),
       });
 
       if (!response.ok) {
@@ -162,7 +166,7 @@ export default function ReadPage() {
         method: 'PUT',
         body: file,
         headers: {
-          'Content-Type': 'application/pdf',
+          'Content-Type': file.type,
         },
       });
 

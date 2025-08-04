@@ -7,14 +7,21 @@ export async function POST(request: NextRequest) {
   if (!session?.userId) {
     return NextResponse.json({ message: 'Unauthorized' }, { status: 401 });
   }
-  
+
   const { filename } = await request.json();
   const blobName = `${session.userId}/${filename}`;
 
+  // The Vercel Blob SDK needs the request body as a readable stream
+  // when used in a Node.js environment. We'll pass `request.body` directly.
+  if (!request.body) {
+    return NextResponse.json(
+      { message: 'Request body is missing' },
+      { status: 400 }
+    );
+  }
+
   try {
-    // The Vercel Blob SDK now returns a different object structure.
-    // We need to request a presigned URL for the client to upload to.
-    const blob = await put(blobName, '', {
+    const blob = await put(blobName, request.body, {
       access: 'public',
       addRandomSuffix: false,
     });
