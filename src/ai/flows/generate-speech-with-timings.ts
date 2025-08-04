@@ -9,12 +9,13 @@
  */
 import { ai } from '@/ai/genkit';
 import { GenerateSpeechWithTimingsInputSchema, GenerateSpeechWithTimingsOutputSchema } from '@/ai/schemas';
+import { openAI } from 'genkitx-openai';
 import { z } from 'genkit';
 
 
-export const generateSpeechWithTimingsFlow = ai.defineFlow(
+export const generateSpeechWithTimings = ai.defineFlow(
   {
-    name: 'generateSpeechWithTimingsFlow',
+    name: 'generateSpeechWithTimings',
     inputSchema: GenerateSpeechWithTimingsInputSchema,
     outputSchema: GenerateSpeechWithTimingsOutputSchema,
   },
@@ -31,7 +32,6 @@ export const generateSpeechWithTimingsFlow = ai.defineFlow(
       config: {
         voice: input.voice,
         speed: input.speakingRate || 1.0,
-        response_format: 'mp3',
       },
       output: {
         format: 'url',
