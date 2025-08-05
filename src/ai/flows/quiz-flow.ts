@@ -11,6 +11,9 @@
 import {ai} from '@/ai/genkit';
 import { GenerateQuizInputSchema, GenerateQuizOutputSchema, type GenerateQuizInput, type GenerateQuizOutput } from '@/ai/schemas/quiz';
 
+// This line explicitly re-exports the type so it can be imported by other files
+export type { GenerateQuizOutput };
+
 export async function generateQuiz(input: GenerateQuizInput): Promise<GenerateQuizOutput> {
   return generateQuizFlow(input);
 }

@@ -1,4 +1,3 @@
-
 'use server';
 
 import { kv } from '@vercel/kv';
@@ -7,7 +6,7 @@ import { getSession, type SessionPayload } from './session';
 import { randomUUID } from 'crypto';
 
 export interface Document {
-  id: string;
+  id: string | null; // Corrected: id can be a string or null
   userId: string;
   fileName: string;
   pdfUrl: string;
@@ -45,9 +44,8 @@ export async function getUserSession(): Promise<UserSession | null> {
   return null;
 }
 
-
 export async function saveDocument(docData: {
-  id?: string;
+  id?: string | null; // Corrected: id can be undefined or null
   fileName: string;
   pdfUrl: string;
   audioUrl?: string | null;
@@ -74,6 +72,7 @@ export async function saveDocument(docData: {
     const updatedDoc: Document = {
       ...existingDocRaw,
       ...docData,
+      id: docId, // Ensure id is set correctly
       audioUrl: docData.audioUrl !== undefined ? docData.audioUrl : existingDocRaw.audioUrl,
       zoomLevel: docData.zoomLevel !== undefined ? docData.zoomLevel : existingDocRaw.zoomLevel,
     };
@@ -109,7 +108,7 @@ export async function getDocuments(): Promise<Document[]> {
   const userId = session.userId;
   const userDocListKey = `user:${userId}:docs`;
 
-  const docIds = await kv.lrange(userDocListKey, 0, -1);
+  const docIds = await kv.lrange<string[]>(userDocListKey, 0, -1);
   if (docIds.length === 0) {
     return [];
   }
@@ -165,5 +164,3 @@ export async function deleteDocument(docId: string): Promise<{ success: boolean,
         return { success: false, message };
     }
 }
-
-    
