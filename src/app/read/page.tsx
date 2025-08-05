@@ -4,7 +4,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import * as pdfjsLib from 'pdfjs-dist';
 import type { PDFDocumentProxy, TextItem as PdfTextItem } from 'pdfjs-dist/types/src/display/api';
-import { UploadCloud, FileText, Loader2, LogOut, Save, Library, Download, Bot, Lightbulb, HelpCircle, Cloud, CloudOff, Settings, Menu, Home, BarChart, BookOpenCheck, BrainCircuit, Mic, FastForward, Rewind, Wind, Maximize, Minimize, ZoomIn, ZoomOut } from 'lucide-react';
+import { UploadCloud, FileText, Loader2, LogOut, Save, Library, Download, Bot, Lightbulb, HelpCircle, Cloud, CloudOff, Settings, Menu, Home, BarChart, BookOpenCheck, BrainCircuit, Mic, FastForward, Rewind, Wind, Maximize, Minimize, ZoomIn, ZoomOut, Trash2 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import PdfViewer from '@/components/pdf-viewer';
 import AudioPlayer from '@/components/audio-player';
@@ -21,7 +21,7 @@ import { explainText, ExplainTextOutput } from '@/ai/flows/explain-text-flow';
 import { generateQuiz, type GenerateQuizOutput } from '@/ai/flows/quiz-flow';
 import { cleanPdfText } from '@/ai/flows/clean-text-flow';
 import { Sidebar, SidebarHeader, SidebarMenu, SidebarMenuItem, SidebarMenuButton, SidebarFooter, SidebarContent } from '@/components/ui/sidebar';
-import { getDocuments, saveDocument, Document, getUserSession } from '@/lib/db';
+import { getDocuments, saveDocument, Document, getUserSession, deleteDocument } from '@/lib/db';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import AiDialog, { AiDialogType } from '@/components/ai-dialog';
 import { Separator } from '@/components/ui/separator';
@@ -396,6 +396,31 @@ export default function ReadPage() {
         setTimeout(() => setProcessingStage('idle'), 2000);
       }
     };
+    
+    const handleDeleteDocument = async (docId: string) => {
+        if (!window.confirm('Are you sure you want to delete this document? This action cannot be undone.')) {
+            return;
+        }
+        try {
+            const result = await deleteDocument(docId);
+            if (result.success) {
+                toast({ title: "Success", description: "Document deleted successfully." });
+                await fetchUserDocuments();
+                // If the deleted document was the active one, reset the view
+                if (activeDoc?.id === docId) {
+                    setPdfState('idle');
+                    setActiveDoc(null);
+                    setDocumentText('');
+                    setFileName('');
+                }
+            } else {
+                throw new Error(result.message);
+            }
+        } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : "An unknown error occurred";
+            toast({ variant: "destructive", title: "Deletion Error", description: `Could not delete document: ${errorMessage}` });
+        }
+    }
 
     const handleAudioTimeUpdate = () => {
         if (!audioRef.current) {
@@ -808,7 +833,7 @@ export default function ReadPage() {
                         )}
                         {userDocuments.map((doc) => (
                           <div key={doc.id} className={cn(
-                              "flex w-full items-center gap-2 overflow-hidden rounded-md p-2 text-left text-sm mb-1",
+                              "flex w-full items-center gap-2 overflow-hidden rounded-md p-2 text-left text-sm mb-1 group",
                               activeDoc?.id === doc.id && "bg-sidebar-accent font-medium text-sidebar-accent-foreground"
                           )}>
                               <FileText />
@@ -821,14 +846,26 @@ export default function ReadPage() {
                                   </TooltipTrigger>
                                   <TooltipContent><p>{doc.fileName}</p></TooltipContent>
                                 </Tooltip>
-                                <Tooltip>
-                                  <TooltipTrigger asChild>
-                                    <Cloud className="h-4 w-4 text-primary" />
-                                  </TooltipTrigger>
-                                  <TooltipContent>
-                                      <p>Saved to cloud</p>
-                                  </TooltipContent>
-                              </Tooltip>
+                                <div className="flex items-center">
+                                    <Tooltip>
+                                      <TooltipTrigger asChild>
+                                        <Cloud className="h-4 w-4 text-primary" />
+                                      </TooltipTrigger>
+                                      <TooltipContent>
+                                          <p>Saved to cloud</p>
+                                      </TooltipContent>
+                                    </Tooltip>
+                                     <Tooltip>
+                                        <TooltipTrigger asChild>
+                                             <Button variant="ghost" size="icon" className="h-7 w-7 opacity-0 group-hover:opacity-100" onClick={() => handleDeleteDocument(doc.id)}>
+                                                <Trash2 className="h-4 w-4 text-destructive" />
+                                            </Button>
+                                        </TooltipTrigger>
+                                        <TooltipContent>
+                                            <p>Delete document</p>
+                                        </TooltipContent>
+                                    </Tooltip>
+                                </div>
                               </div>
                           </div>
                         ))}
@@ -938,3 +975,5 @@ export default function ReadPage() {
       </TooltipProvider>
     );
 }
+
+    

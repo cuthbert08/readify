@@ -2,6 +2,7 @@
 'use server';
 
 import { kv } from '@vercel/kv';
+import { del as deleteBlob } from '@vercel/blob';
 import { getSession, type SessionPayload } from './session';
 import { randomUUID } from 'crypto';
 
@@ -125,3 +126,44 @@ export async function getDocuments(): Promise<Document[]> {
     .filter((doc): doc is Document => doc !== null)
     .sort((a,b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 }
+
+export async function deleteDocument(docId: string): Promise<{ success: boolean, message?: string }> {
+    const session = await getSession();
+    if (!session?.userId) {
+        throw new Error('Authentication required.');
+    }
+
+    try {
+        const docKey = `doc:${docId}`;
+        const doc: Document | null = await kv.get(docKey);
+
+        if (!doc) {
+            return { success: true, message: 'Document already deleted.' };
+        }
+
+        if (doc.userId !== session.userId && !session.isAdmin) {
+            throw new Error('You do not have permission to delete this document.');
+        }
+
+        // Delete files from Vercel Blob
+        const urlsToDelete = [doc.pdfUrl];
+        if (doc.audioUrl) {
+            urlsToDelete.push(doc.audioUrl);
+        }
+        await deleteBlob(urlsToDelete);
+
+        // Delete from KV
+        const pipeline = kv.pipeline();
+        pipeline.del(docKey);
+        pipeline.lrem(`user:${doc.userId}:docs`, 1, docId);
+        await pipeline.exec();
+        
+        return { success: true };
+    } catch (error) {
+        const message = error instanceof Error ? error.message : 'An unknown error occurred';
+        console.error('Failed to delete document:', message);
+        return { success: false, message };
+    }
+}
+
+    
