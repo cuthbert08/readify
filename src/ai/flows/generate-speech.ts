@@ -1,3 +1,4 @@
+
 'use server';
 
 /**
@@ -14,9 +15,18 @@ import * as os from 'os';
 import * as path from 'path';
 import { randomUUID } from 'crypto';
 import ffmpeg from 'fluent-ffmpeg';
-import ffmpegPath from '@ffmpeg-installer/ffmpeg';
 
-ffmpeg.setFfmpegPath(ffmpegPath.path);
+// Set the path for ffmpeg and ffprobe. This needs to point to where the binaries
+// will be located in the final build output.
+const ffmpegPath = process.env.NODE_ENV === 'production' 
+  ? path.join(process.cwd(), '.next/server/static/bin/ffmpeg')
+  : require('@ffmpeg-installer/ffmpeg').path;
+const ffprobePath = process.env.NODE_ENV === 'production'
+  ? path.join(process.cwd(), '.next/server/static/bin/ffprobe')
+  : require('@ffprobe-installer/ffprobe').path;
+
+ffmpeg.setFfmpegPath(ffmpegPath);
+ffmpeg.setFfprobePath(ffprobePath);
 
 // Function to split text into chunks without breaking sentences
 function splitText(text: string, maxLength: number): string[] {
@@ -62,11 +72,16 @@ async function mergeAudioFiles(filePaths: string[], outputPath: string): Promise
         });
 
         command
+            .on('start', (commandLine) => {
+                console.log('--- FFMPEG Command Started ---');
+                console.log('Command:', commandLine);
+            })
             .on('error', (err) => {
                 console.error('FFmpeg Error:', err);
                 reject(err);
             })
             .on('end', () => {
+                console.log('--- FFMPEG Command Finished ---');
                 resolve();
             })
             .mergeToFile(outputPath, os.tmpdir());
@@ -86,11 +101,14 @@ export const generateSpeech = ai.defineFlow(
         throw new Error("Input text cannot be empty.");
     }
 
+    console.log('--- Starting speech generation flow ---');
+
     const textChunks = splitText(input.text, 4000);
     const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'readify-audio-'));
     const audioFilePaths: string[] = [];
 
     try {
+        console.log(`Generated ${textChunks.length} text chunks.`);
         // Generate audio for each chunk in parallel
         const audioGenerationPromises = textChunks.map(async (chunk, index) => {
             const { media } = await ai.generate({
@@ -121,6 +139,8 @@ export const generateSpeech = ai.defineFlow(
         const generatedPaths = await Promise.all(audioGenerationPromises);
         audioFilePaths.push(...generatedPaths);
 
+        console.log(`Generated ${audioFilePaths.length} audio files. Merging now.`);
+        
         if (audioFilePaths.length === 0) {
             throw new Error("No audio files were generated.");
         }

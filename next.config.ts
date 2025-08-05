@@ -1,8 +1,11 @@
+
 // next.config.ts
 import type { NextConfig } from 'next';
+const CopyPlugin = require('copy-webpack-plugin');
+const path = require('path');
 
 const nextConfig: NextConfig = {
-  /* config options here */
+  // ... existing config ...
   typescript: {
     ignoreBuildErrors: true,
   },
@@ -20,29 +23,41 @@ const nextConfig: NextConfig = {
     ],
   },
   webpack: (config, { isServer }) => {
-    // For the client-side build, tell Webpack to ignore these modules
     if (!isServer) {
       config.resolve.fallback = {
         ...config.resolve.fallback,
         'fluent-ffmpeg': false,
         '@ffmpeg-installer/ffmpeg': false,
+        '@ffprobe-installer/ffprobe': false,
       };
     }
 
-    // For the server-side build, tell Webpack to treat these as external dependencies
     if (isServer) {
-      if (config.externals) {
-        if (Array.isArray(config.externals)) {
-          config.externals.push('fluent-ffmpeg', '@ffmpeg-installer/ffmpeg');
-        } else {
-          // This case handles a non-array externals configuration, though less common.
-          config.externals = ['fluent-ffmpeg', '@ffmpeg-installer/ffmpeg'];
-        }
-      } else {
-        config.externals = ['fluent-ffmpeg', '@ffmpeg-installer/ffmpeg'];
+      if (!config.externals) {
+        config.externals = [];
       }
-    }
+      if (Array.isArray(config.externals)) {
+        config.externals.push('fluent-ffmpeg', '@ffmpeg-installer/ffmpeg', '@ffprobe-installer/ffprobe');
+      }
 
+      // Add a plugin to copy the binaries to a known location in the build output
+      config.plugins.push(
+        new CopyPlugin({
+          patterns: [
+            {
+              from: path.join(__dirname, 'node_modules/@ffmpeg-installer/ffmpeg/lib/ffmpeg'),
+              to: path.join(__dirname, '.next/server/static/bin/ffmpeg'),
+              toType: 'file',
+            },
+            {
+              from: path.join(__dirname, 'node_modules/@ffprobe-installer/ffprobe/lib/ffprobe'),
+              to: path.join(__dirname, '.next/server/static/bin/ffprobe'),
+              toType: 'file',
+            },
+          ],
+        })
+      );
+    }
     return config;
   },
 };
