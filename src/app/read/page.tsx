@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useEffect, useCallback, useRef } from 'react';
@@ -46,7 +47,9 @@ type ActiveDocument = {
   doc: PDFDocumentProxy | null;
   url: string | null;
   audioUrl?: string | null;
+  generatedAudioBlob?: Blob | null; // <-- To hold newly generated audio before saving
 };
+
 
 // Helper function to concatenate audio blobs on the client-side
 async function mergeAudio(audioDataUris: string[]): Promise<Blob> {
@@ -246,6 +249,7 @@ export default function ReadPage() {
         doc: pdf,
         url: typeof source === 'string' ? source : null,
         audioUrl: savedData?.audioUrl,
+        generatedAudioBlob: null,
       };
 
       setActiveDoc(docToLoad);
@@ -295,71 +299,74 @@ export default function ReadPage() {
     await loadPdf(doc.pdfUrl, doc.id, doc);
   }
 
-  const handleSaveAfterAudio = async (audioBlob: Blob) => {
-      if (!activeDoc || !activeDoc.doc) return;
+  const handleSaveDocument = async () => {
+    if (!activeDoc || !activeDoc.doc) return;
 
-      if (!activeDoc.file && !activeDoc.id) {
-        toast({ variant: "destructive", title: "Save Error", description: "No document data to save." });
-        return;
-      }
+    if (!activeDoc.file && !activeDoc.id) {
+      toast({ variant: "destructive", title: "Save Error", description: "No document data to save." });
+      return;
+    }
 
-      setIsSaving(true);
-      try {
-        let pdfUrl = activeDoc.url;
-        let audioUrl: string | null = null;
-        
-        // 1. Upload PDF if it's a new file
-        if (activeDoc.file) {
-          const uploadPdfResponse = await fetch('/api/upload', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/pdf', 'x-vercel-filename': activeDoc.file.name },
-            body: activeDoc.file,
-          });
-          if (!uploadPdfResponse.ok) throw new Error('PDF Upload failed');
-          const pdfBlob = await uploadPdfResponse.json();
-          pdfUrl = pdfBlob.url;
-        }
+    setIsSaving(true);
+    try {
+      let pdfUrl = activeDoc.url;
+      let audioUrl = activeDoc.audioUrl;
       
-        if (!pdfUrl) throw new Error("Could not determine PDF URL for saving.");
+      // 1. Upload PDF if it's a new local file
+      if (activeDoc.file) {
+        const uploadPdfResponse = await fetch('/api/upload', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/pdf', 'x-vercel-filename': activeDoc.file.name },
+          body: activeDoc.file,
+        });
+        if (!uploadPdfResponse.ok) throw new Error('PDF Upload failed');
+        const pdfBlob = await uploadPdfResponse.json();
+        pdfUrl = pdfBlob.url;
+      }
+    
+      if (!pdfUrl) throw new Error("Could not determine PDF URL for saving.");
 
-        // 2. Upload the merged audio blob
+      // 2. Upload the newly generated audio blob if it exists
+      if (activeDoc.generatedAudioBlob) {
         const audioFileName = `${fileName.replace(/\.pdf$/i, '') || 'audio'}.mp3`;
         const uploadAudioResponse = await fetch('/api/upload', {
             method: 'POST',
             headers: { 'Content-Type': 'audio/mp3', 'x-vercel-filename': audioFileName },
-            body: audioBlob,
+            body: activeDoc.generatedAudioBlob,
         });
         if (!uploadAudioResponse.ok) throw new Error('Audio Upload failed');
         const audioBlobResult = await uploadAudioResponse.json();
         audioUrl = audioBlobResult.url;
-
-        // 3. Save document metadata with both URLs
-        const docToSave = {
-          id: activeDoc.id,
-          fileName: fileName,
-          pdfUrl: pdfUrl,
-          zoomLevel: zoomLevel,
-          audioUrl: audioUrl,
-        };
-
-        const savedDoc = await saveDocument(docToSave);
-
-        setActiveDoc(prev => prev ? { ...prev, id: savedDoc.id, file: null, url: savedDoc.pdfUrl, audioUrl: savedDoc.audioUrl } : null);
-      
-        await fetchUserDocuments(); 
-
-        toast({ title: "Success", description: "Document and audio saved successfully." });
-      } catch (error) {
-        console.error('Save error:', error);
-        toast({ 
-          variant: "destructive", 
-          title: "Save Error", 
-          description: error instanceof Error ? error.message : "Could not save your document." 
-        });
-      } finally {
-        setIsSaving(false);
       }
-    };
+      
+      // 3. Save document metadata with both URLs
+      const docToSave = {
+        id: activeDoc.id,
+        fileName: fileName,
+        pdfUrl: pdfUrl,
+        zoomLevel: zoomLevel,
+        audioUrl: audioUrl,
+      };
+
+      const savedDoc = await saveDocument(docToSave);
+
+      // Update activeDoc state to reflect saved status
+      setActiveDoc(prev => prev ? { ...prev, id: savedDoc.id, file: null, url: savedDoc.pdfUrl, audioUrl: savedDoc.audioUrl, generatedAudioBlob: null } : null);
+    
+      await fetchUserDocuments(); 
+
+      toast({ title: "Success", description: "Document and audio saved successfully." });
+    } catch (error) {
+      console.error('Save error:', error);
+      toast({ 
+        variant: "destructive", 
+        title: "Save Error", 
+        description: error instanceof Error ? error.message : "Could not save your document." 
+      });
+    } finally {
+      setIsSaving(false);
+    }
+  };
 
   const handlePlayPause = async () => {
     if (isSpeaking) {
@@ -433,8 +440,9 @@ export default function ReadPage() {
         setIsSpeaking(true);
       }
 
-      // Save the newly created audio blob
-      await handleSaveAfterAudio(mergedAudioBlob);
+      // Hold the new audio blob in state, then trigger save
+      setActiveDoc(prev => prev ? { ...prev, generatedAudioBlob: mergedAudioBlob } : null);
+      await handleSaveDocument();
       
       setProcessingStage('idle');
 
@@ -635,12 +643,11 @@ export default function ReadPage() {
   }, []);
 
   useEffect(() => {
+    // Auto-save metadata (like zoom) but not the full audio blob
     if (activeDoc?.id && !isSaving && processingStage === 'idle') {
       const timer = setTimeout(() => {
-        // Do not auto-save audioUrl as it's a blob url now
-        const { audioUrl, ...docToSave } = activeDoc;
         saveDocument({
-          ...docToSave,
+          id: activeDoc.id,
           fileName: fileName,
           zoomLevel: zoomLevel
         }).catch(err => console.error("Failed to auto-save progress", err));
@@ -898,12 +905,12 @@ export default function ReadPage() {
                               </Tooltip>
                               <Tooltip>
                                   <TooltipTrigger asChild>
-                                      <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => isGeneratingSpeech || handlePlayPause()} disabled={isSaving || isGeneratingSpeech}>
+                                      <Button variant="ghost" size="icon" className="h-7 w-7" onClick={handleSaveDocument} disabled={isSaving || isGeneratingSpeech}>
                                           {isSaving || isGeneratingSpeech ? <Loader2 className="h-4 w-4 animate-spin"/> : <CloudOff className="h-4 w-4 text-destructive" />}
                                       </Button>
                                   </TooltipTrigger>
                                   <TooltipContent>
-                                      <p>Not saved. Generate audio to save to cloud.</p>
+                                      <p>Not saved. Generate audio or click to save.</p>
                                   </TooltipContent>
                               </Tooltip>
                           </div>

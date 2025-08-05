@@ -1,3 +1,4 @@
+
 'use server';
 
 import { kv } from '@vercel/kv';
@@ -6,7 +7,7 @@ import { getSession, type SessionPayload } from './session';
 import { randomUUID } from 'crypto';
 
 export interface Document {
-  id: string | null; // Corrected: id can be a string or null
+  id: string | null; 
   userId: string;
   fileName: string;
   pdfUrl: string;
@@ -45,9 +46,9 @@ export async function getUserSession(): Promise<UserSession | null> {
 }
 
 export async function saveDocument(docData: {
-  id?: string | null; // Corrected: id can be undefined or null
-  fileName: string;
-  pdfUrl: string;
+  id?: string | null;
+  fileName?: string;
+  pdfUrl?: string;
   audioUrl?: string | null;
   zoomLevel?: number;
 }): Promise<Document> {
@@ -80,6 +81,9 @@ export async function saveDocument(docData: {
     return updatedDoc;
 
   } else {
+    if (!docData.fileName || !docData.pdfUrl) {
+      throw new Error("fileName and pdfUrl are required for new documents.");
+    }
     docId = randomUUID();
     const newDoc: Document = {
       id: docId,
@@ -144,10 +148,10 @@ export async function deleteDocument(docId: string): Promise<{ success: boolean,
             throw new Error('You do not have permission to delete this document.');
         }
 
-        // Delete files from Vercel Blob by extracting the pathname from the URL
-        const urlsToDelete = [new URL(doc.pdfUrl).pathname];
+        // Delete files from Vercel Blob by passing the full URL
+        const urlsToDelete = [doc.pdfUrl];
         if (doc.audioUrl) {
-            urlsToDelete.push(new URL(doc.audioUrl).pathname);
+            urlsToDelete.push(doc.audioUrl);
         }
         await deleteBlob(urlsToDelete);
 
