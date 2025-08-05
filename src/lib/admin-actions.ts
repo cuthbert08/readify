@@ -6,6 +6,7 @@ import { getSession } from './session';
 import type { User as DbUser } from './db';
 import { randomUUID } from 'crypto';
 import bcrypt from 'bcrypt';
+import { deleteDocument as dbDeleteDocument } from './db';
 
 export interface Document {
   id: string;
@@ -167,4 +168,16 @@ export async function createUser(userData: {
         console.error('Failed to create user:', message);
         return { success: false, message };
     }
+}
+
+export async function deleteDocumentAsAdmin(docId: string): Promise<{ success: boolean; message?: string }> {
+    await checkAdmin();
+    try {
+        const result = await dbDeleteDocument(docId);
+        return result;
+    } catch (error) {
+        const message = error instanceof Error ? error.message : 'An unknown error occurred';
+        console.error('Failed to delete document as admin:', message);
+        return { success: false, message };
+    }
 }

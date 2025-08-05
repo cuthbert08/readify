@@ -8,7 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
-import { getAllUsers, getAllDocuments, deleteUser } from '@/lib/admin-actions';
+import { getAllUsers, getAllDocuments, deleteUser, deleteDocumentAsAdmin } from '@/lib/admin-actions';
 import type { User as UserType, DocumentWithAuthorEmail as Document } from '@/lib/admin-actions';
 import AddUserDialog from '@/components/add-user-dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -64,6 +64,26 @@ export default function AdminPage() {
       }
     }
   };
+
+  const handleDeleteDocument = async (docId: string) => {
+    if (confirm('Are you sure you want to delete this document? This action cannot be undone.')) {
+        try {
+            const result = await deleteDocumentAsAdmin(docId);
+            if(result.success) {
+                toast({ title: 'Success', description: 'Document deleted successfully.' });
+                fetchAdminData(); // Refresh data
+            } else {
+                throw new Error(result.message);
+            }
+        } catch (error) {
+             toast({
+                variant: 'destructive',
+                title: 'Error',
+                description: error instanceof Error ? error.message : 'Failed to delete document.',
+            });
+        }
+    }
+  }
   
   const handleLogout = async () => {
     await fetch('/api/auth/logout', { method: 'POST' });
@@ -165,7 +185,7 @@ export default function AdminPage() {
                         <TableHead>File Name</TableHead>
                         <TableHead>Owner (Email)</TableHead>
                         <TableHead>Uploaded</TableHead>
-                        <TableHead>Link</TableHead>
+                        <TableHead>Actions</TableHead>
                     </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -174,10 +194,14 @@ export default function AdminPage() {
                         <TableCell>{doc.fileName}</TableCell>
                         <TableCell>{doc.ownerEmail}</TableCell>
                         <TableCell>{new Date(doc.createdAt).toLocaleDateString()}</TableCell>
-                        <TableCell>
+                        <TableCell className="space-x-2">
                             <a href={doc.pdfUrl} target="_blank" rel="noopener noreferrer">
                                 <Button variant="outline">View PDF</Button>
                             </a>
+                            <Button variant="destructive" onClick={() => handleDeleteDocument(doc.id)}>
+                                <Trash2 className="mr-2 h-4 w-4" />
+                                Delete
+                            </Button>
                         </TableCell>
                         </TableRow>
                     ))}
