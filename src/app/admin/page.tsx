@@ -3,15 +3,15 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { BarChart, Home, Users, FileText, Trash2, LogOut, PlusCircle } from 'lucide-react';
+import { BarChart, Users, FileText, Trash2, LogOut, PlusCircle } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
 import { getAllUsers, getAllDocuments, deleteUser } from '@/lib/admin-actions';
 import type { User, Document } from '@/lib/admin-actions';
 import AddUserDialog from '@/components/add-user-dialog';
+import { Separator } from '@/components/ui/separator';
 
 
 export default function AdminPage() {
@@ -71,9 +71,6 @@ export default function AdminPage() {
     router.push('/');
   };
 
-  const totalUsers = users.length;
-  const totalDocuments = documents.length;
-
   return (
     <>
     <div className="flex min-h-screen w-full flex-col bg-muted/40">
@@ -87,111 +84,80 @@ export default function AdminPage() {
             </Button>
           </div>
       </header>
-      <main className="flex flex-1 flex-col gap-4 p-4 sm:px-6 sm:py-0 md:gap-8">
-        <Tabs defaultValue="dashboard">
-          <TabsList>
-            <TabsTrigger value="dashboard"><Home className="mr-2"/>Dashboard</TabsTrigger>
-            <TabsTrigger value="users"><Users className="mr-2"/>User Management</TabsTrigger>
-            <TabsTrigger value="documents"><FileText className="mr-2"/>Document Management</TabsTrigger>
-          </TabsList>
-          
-          {/* Dashboard Tab */}
-          <TabsContent value="dashboard">
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-              <Card>
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium">Total Users</CardTitle>
-                  <Users className="h-4 w-4 text-muted-foreground" />
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold">{totalUsers}</div>
-                </CardContent>
-              </Card>
-              <Card>
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium">Total Documents</CardTitle>
-                  <FileText className="h-4 w-4 text-muted-foreground" />
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold">{totalDocuments}</div>
-                </CardContent>
-              </Card>
+      <main className="flex flex-1 flex-col gap-8 p-4 sm:px-6">
+        
+        {/* User Management Section */}
+        <Card>
+            <CardHeader className="flex justify-between items-center flex-row">
+            <div className="flex items-center gap-2">
+                <Users />
+                <CardTitle>User Management</CardTitle>
             </div>
-          </TabsContent>
-
-          {/* User Management Tab */}
-          <TabsContent value="users">
-            <Card>
-              <CardHeader className="flex justify-between items-center flex-row">
-                <CardTitle>All Users</CardTitle>
-                <Button onClick={() => setIsAddUserOpen(true)}><PlusCircle className="mr-2"/>Add User</Button>
-              </CardHeader>
-              <CardContent>
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Email</TableHead>
-                      <TableHead>User ID</TableHead>
-                      <TableHead>Role</TableHead>
-                      <TableHead>Signed Up</TableHead>
-                      <TableHead>Actions</TableHead>
+            <Button onClick={() => setIsAddUserOpen(true)}><PlusCircle className="mr-2"/>Add User</Button>
+            </CardHeader>
+            <CardContent>
+            <Table>
+                <TableHeader>
+                <TableRow>
+                    <TableHead>Email</TableHead>
+                    <TableHead>User ID</TableHead>
+                    <TableHead>Role</TableHead>
+                    <TableHead>Signed Up</TableHead>
+                    <TableHead>Actions</TableHead>
+                </TableRow>
+                </TableHeader>
+                <TableBody>
+                {users.map(user => (
+                    <TableRow key={user.id}>
+                    <TableCell>{user.email}</TableCell>
+                    <TableCell>{user.id}</TableCell>
+                    <TableCell>{user.isAdmin ? 'Admin' : 'User'}</TableCell>
+                    <TableCell>{new Date(user.createdAt).toLocaleDateString()}</TableCell>
+                    <TableCell>
+                        <Button variant="destructive" size="icon" onClick={() => handleDeleteUser(user.id)} disabled={user.isAdmin}>
+                        <Trash2 className="h-4 w-4" />
+                        </Button>
+                    </TableCell>
                     </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {users.map(user => (
-                      <TableRow key={user.id}>
-                        <TableCell>{user.email}</TableCell>
-                        <TableCell>{user.id}</TableCell>
-                        <TableCell>{user.isAdmin ? 'Admin' : 'User'}</TableCell>
-                        <TableCell>{new Date(user.createdAt).toLocaleDateString()}</TableCell>
-                        <TableCell>
-                          <Button variant="destructive" size="icon" onClick={() => handleDeleteUser(user.id)} disabled={user.isAdmin}>
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </CardContent>
-            </Card>
-          </TabsContent>
-          
-          {/* Document Management Tab */}
-          <TabsContent value="documents">
-            <Card>
-              <CardHeader>
-                <CardTitle>All Documents</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>File Name</TableHead>
-                      <TableHead>Owner (User ID)</TableHead>
-                      <TableHead>Uploaded</TableHead>
-                      <TableHead>Link</TableHead>
+                ))}
+                </TableBody>
+            </Table>
+            </CardContent>
+        </Card>
+        
+        {/* Document Management Section */}
+        <Card>
+            <CardHeader className="flex items-center gap-2 flex-row">
+                <FileText />
+                <CardTitle>Document Management</CardTitle>
+            </CardHeader>
+            <CardContent>
+            <Table>
+                <TableHeader>
+                <TableRow>
+                    <TableHead>File Name</TableHead>
+                    <TableHead>Owner (User ID)</TableHead>
+                    <TableHead>Uploaded</TableHead>
+                    <TableHead>Link</TableHead>
+                </TableRow>
+                </TableHeader>
+                <TableBody>
+                {documents.map(doc => (
+                    <TableRow key={doc.id}>
+                    <TableCell>{doc.fileName}</TableCell>
+                    <TableCell>{doc.userId}</TableCell>
+                    <TableCell>{new Date(doc.createdAt).toLocaleDateString()}</TableCell>
+                    <TableCell>
+                        <a href={doc.pdfUrl} target="_blank" rel="noopener noreferrer">
+                            <Button variant="outline">View PDF</Button>
+                        </a>
+                    </TableCell>
                     </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {documents.map(doc => (
-                      <TableRow key={doc.id}>
-                        <TableCell>{doc.fileName}</TableCell>
-                        <TableCell>{doc.userId}</TableCell>
-                        <TableCell>{new Date(doc.createdAt).toLocaleDateString()}</TableCell>
-                        <TableCell>
-                            <a href={doc.pdfUrl} target="_blank" rel="noopener noreferrer">
-                                <Button variant="outline">View PDF</Button>
-                            </a>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </CardContent>
-            </Card>
-          </TabsContent>
-        </Tabs>
+                ))}
+                </TableBody>
+            </Table>
+            </CardContent>
+        </Card>
       </main>
     </div>
     <AddUserDialog 
