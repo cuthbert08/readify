@@ -3,19 +3,20 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Users, FileText, Trash2, LogOut, PlusCircle } from 'lucide-react';
+import { Users, FileText, Trash2, LogOut, PlusCircle, User, File } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
 import { getAllUsers, getAllDocuments, deleteUser } from '@/lib/admin-actions';
-import type { User, DocumentWithAuthorEmail as Document } from '@/lib/admin-actions';
+import type { User as UserType, DocumentWithAuthorEmail as Document } from '@/lib/admin-actions';
 import AddUserDialog from '@/components/add-user-dialog';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
 export default function AdminPage() {
   const router = useRouter();
   const { toast } = useToast();
-  const [users, setUsers] = useState<User[]>([]);
+  const [users, setUsers] = useState<UserType[]>([]);
   const [documents, setDocuments] = useState<Document[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isAddUserOpen, setIsAddUserOpen] = useState(false);
@@ -83,77 +84,109 @@ export default function AdminPage() {
           </div>
       </header>
       <main className="flex flex-1 flex-col gap-8 p-4 sm:px-6">
-        
-        {/* User Management Section */}
-        <Card>
-            <CardHeader className="flex justify-between items-center flex-row">
-            <div className="flex items-center gap-2">
-                <Users />
-                <CardTitle>User Management</CardTitle>
+        <Tabs defaultValue="dashboard">
+          <TabsList>
+            <TabsTrigger value="dashboard">Dashboard</TabsTrigger>
+            <TabsTrigger value="users">User Management</TabsTrigger>
+            <TabsTrigger value="documents">Document Management</TabsTrigger>
+          </TabsList>
+          
+          <TabsContent value="dashboard" className="pt-6">
+             <div className="grid gap-4 md:grid-cols-2">
+                <Card>
+                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                    <CardTitle className="text-sm font-medium">Total Users</CardTitle>
+                    <Users className="h-4 w-4 text-muted-foreground" />
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-2xl font-bold">{users.length}</div>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                    <CardTitle className="text-sm font-medium">Total Documents</CardTitle>
+                    <File className="h-4 w-4 text-muted-foreground" />
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-2xl font-bold">{documents.length}</div>
+                  </CardContent>
+                </Card>
             </div>
-            <Button onClick={() => setIsAddUserOpen(true)}><PlusCircle className="mr-2"/>Add User</Button>
-            </CardHeader>
-            <CardContent>
-            <Table>
-                <TableHeader>
-                <TableRow>
-                    <TableHead>Email</TableHead>
-                    <TableHead>Role</TableHead>
-                    <TableHead>Signed Up</TableHead>
-                    <TableHead>Actions</TableHead>
-                </TableRow>
-                </TableHeader>
-                <TableBody>
-                {users.map(user => (
-                    <TableRow key={user.id}>
-                    <TableCell>{user.email}</TableCell>
-                    <TableCell>{user.isAdmin ? 'Admin' : 'User'}</TableCell>
-                    <TableCell>{new Date(user.createdAt).toLocaleDateString()}</TableCell>
-                    <TableCell>
-                        <Button variant="destructive" size="icon" onClick={() => handleDeleteUser(user.id)} disabled={user.isAdmin}>
-                        <Trash2 className="h-4 w-4" />
-                        </Button>
-                    </TableCell>
+          </TabsContent>
+
+          <TabsContent value="users" className="pt-6">
+            <Card>
+                <CardHeader className="flex justify-between items-center flex-row">
+                <div className="flex items-center gap-2">
+                    <Users />
+                    <CardTitle>User Management</CardTitle>
+                </div>
+                <Button onClick={() => setIsAddUserOpen(true)}><PlusCircle className="mr-2"/>Add User</Button>
+                </CardHeader>
+                <CardContent>
+                <Table>
+                    <TableHeader>
+                    <TableRow>
+                        <TableHead>Email</TableHead>
+                        <TableHead>Role</TableHead>
+                        <TableHead>Signed Up</TableHead>
+                        <TableHead>Actions</TableHead>
                     </TableRow>
-                ))}
-                </TableBody>
-            </Table>
-            </CardContent>
-        </Card>
-        
-        {/* Document Management Section */}
-        <Card>
-            <CardHeader className="flex items-center gap-2 flex-row">
-                <FileText />
-                <CardTitle>Document Management</CardTitle>
-            </CardHeader>
-            <CardContent>
-            <Table>
-                <TableHeader>
-                <TableRow>
-                    <TableHead>File Name</TableHead>
-                    <TableHead>Owner (Email)</TableHead>
-                    <TableHead>Uploaded</TableHead>
-                    <TableHead>Link</TableHead>
-                </TableRow>
-                </TableHeader>
-                <TableBody>
-                {documents.map(doc => (
-                    <TableRow key={doc.id}>
-                    <TableCell>{doc.fileName}</TableCell>
-                    <TableCell>{doc.ownerEmail}</TableCell>
-                    <TableCell>{new Date(doc.createdAt).toLocaleDateString()}</TableCell>
-                    <TableCell>
-                        <a href={doc.pdfUrl} target="_blank" rel="noopener noreferrer">
-                            <Button variant="outline">View PDF</Button>
-                        </a>
-                    </TableCell>
+                    </TableHeader>
+                    <TableBody>
+                    {users.map(user => (
+                        <TableRow key={user.id}>
+                        <TableCell>{user.email}</TableCell>
+                        <TableCell>{user.isAdmin ? 'Admin' : 'User'}</TableCell>
+                        <TableCell>{new Date(user.createdAt).toLocaleDateString()}</TableCell>
+                        <TableCell>
+                            <Button variant="destructive" size="icon" onClick={() => handleDeleteUser(user.id)} disabled={user.isAdmin}>
+                            <Trash2 className="h-4 w-4" />
+                            </Button>
+                        </TableCell>
+                        </TableRow>
+                    ))}
+                    </TableBody>
+                </Table>
+                </CardContent>
+            </Card>
+          </TabsContent>
+          
+          <TabsContent value="documents" className="pt-6">
+            <Card>
+                <CardHeader className="flex items-center gap-2 flex-row">
+                    <FileText />
+                    <CardTitle>Document Management</CardTitle>
+                </CardHeader>
+                <CardContent>
+                <Table>
+                    <TableHeader>
+                    <TableRow>
+                        <TableHead>File Name</TableHead>
+                        <TableHead>Owner (Email)</TableHead>
+                        <TableHead>Uploaded</TableHead>
+                        <TableHead>Link</TableHead>
                     </TableRow>
-                ))}
-                </TableBody>
-            </Table>
-            </CardContent>
-        </Card>
+                    </TableHeader>
+                    <TableBody>
+                    {documents.map(doc => (
+                        <TableRow key={doc.id}>
+                        <TableCell>{doc.fileName}</TableCell>
+                        <TableCell>{doc.ownerEmail}</TableCell>
+                        <TableCell>{new Date(doc.createdAt).toLocaleDateString()}</TableCell>
+                        <TableCell>
+                            <a href={doc.pdfUrl} target="_blank" rel="noopener noreferrer">
+                                <Button variant="outline">View PDF</Button>
+                            </a>
+                        </TableCell>
+                        </TableRow>
+                    ))}
+                    </TableBody>
+                </Table>
+                </CardContent>
+            </Card>
+          </TabsContent>
+        </Tabs>
       </main>
     </div>
     <AddUserDialog 
