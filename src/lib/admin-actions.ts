@@ -43,33 +43,36 @@ export async function getAllUsers(): Promise<User[]> {
 
 export async function getAllDocuments(): Promise<Document[]> {
     await checkAdmin();
-    const userDocListKeys = await kv.keys('user:*:docs');
-    if (userDocListKeys.length === 0) return [];
-
-    let allDocIds: string[] = [];
-    for (const key of userDocListKeys) {
-        const docIds = await kv.lrange(key, 0, -1);
-        allDocIds.push(...docIds);
-    }
-    
-    if (allDocIds.length === 0) return [];
-    
-    const uniqueDocIds = [...new Set(allDocIds.filter(id => id))];
-    if (uniqueDocIds.length === 0) return [];
-
     const allDocs: Document[] = [];
-    const BATCH_SIZE = 100; 
+    const BATCH_SIZE = 100; // How many documents to fetch at a time
 
-    for (let i = 0; i < uniqueDocIds.length; i += BATCH_SIZE) {
-        const batchIds = uniqueDocIds.slice(i, i + BATCH_SIZE);
-        const docKeys = batchIds.map(id => `doc:${id}`);
-        if (docKeys.length > 0) {
-            const docsBatch = await kv.mget<Document[]>(...docKeys);
-            const validDocs = docsBatch.filter((d): d is Document => d !== null && d.id !== undefined && d.fileName !== undefined);
-            allDocs.push(...validDocs);
+    // Use a cursor to iterate over all user document lists without fetching all keys at once
+    let cursor = 0;
+    do {
+        const [nextCursor, keys] = await kv.scan(cursor, { match: 'user:*:docs' });
+        cursor = nextCursor;
+
+        let allDocIds: string[] = [];
+        for (const key of keys) {
+            const docIds = await kv.lrange(key, 0, -1);
+            allDocIds.push(...docIds);
         }
-    }
-    
+
+        const uniqueDocIds = [...new Set(allDocIds.filter(id => id))];
+
+        // Fetch document data in batches
+        for (let i = 0; i < uniqueDocIds.length; i += BATCH_SIZE) {
+            const batchIds = uniqueDocIds.slice(i, i + BATCH_SIZE);
+            const docKeys = batchIds.map(id => `doc:${id}`);
+            if (docKeys.length > 0) {
+                const docsBatch = await kv.mget<Document[]>(...docKeys);
+                const validDocs = docsBatch.filter((d): d is Document => d !== null && d.id !== undefined && d.fileName !== undefined);
+                allDocs.push(...validDocs);
+            }
+        }
+
+    } while (cursor !== 0);
+
     return allDocs.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 }
 
