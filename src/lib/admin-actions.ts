@@ -6,8 +6,6 @@ import { getSession } from './session';
 import type { User as DbUser } from './db';
 import { randomUUID } from 'crypto';
 import bcrypt from 'bcrypt';
-import type { WordTimestamp } from '@/ai/schemas';
-
 
 export interface Document {
   id: string;
@@ -15,7 +13,6 @@ export interface Document {
   fileName: string;
   pdfUrl: string;
   audioUrl: string | null;
-  words: WordTimestamp[] | null;
   zoomLevel: number;
   createdAt: string; 
 }

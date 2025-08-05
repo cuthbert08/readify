@@ -1,21 +1,20 @@
-
 'use server';
 
 /**
- * @fileOverview An advanced text-to-speech AI agent using OpenAI.
- * This flow generates audio and provides precise word-level timing information.
+ * @fileOverview An text-to-speech AI agent using OpenAI.
+ * This flow generates audio from text.
  *
- * - generateSpeechWithTimings - A function that handles the text-to-speech process.
+ * - generateSpeech - A function that handles the text-to-speech process.
  */
 import { ai } from '@/ai/genkit';
-import { GenerateSpeechWithTimingsInputSchema, GenerateSpeechWithTimingsOutputSchema } from '@/ai/schemas';
+import { GenerateSpeechInputSchema, GenerateSpeechOutputSchema } from '@/ai/schemas';
 import { z } from 'genkit';
 
-export const generateSpeechWithTimingsFlow = ai.defineFlow(
+export const generateSpeech = ai.defineFlow(
   {
-    name: 'generateSpeechWithTimingsFlow',
-    inputSchema: GenerateSpeechWithTimingsInputSchema,
-    outputSchema: GenerateSpeechWithTimingsOutputSchema,
+    name: 'generateSpeech',
+    inputSchema: GenerateSpeechInputSchema,
+    outputSchema: GenerateSpeechOutputSchema,
   },
   async (input) => {
     
@@ -23,30 +22,20 @@ export const generateSpeechWithTimingsFlow = ai.defineFlow(
         throw new Error("Input text cannot be empty.");
     }
 
-    // Generate speech from the text using OpenAI, requesting word-level timestamps
-    const { media, content, finishReason } = await ai.generate({
-      model: 'openai/tts-1-hd',
+    const { media } = await ai.generate({
+      model: 'openai/tts-1',
       prompt: input.text,
       config: {
         voice: input.voice,
         speed: input.speakingRate || 1.0,
-        response_format: 'mp3',
-        extra_body: {
-            timestamp_granularities: ["word"]
-        }
       },
       output: {
         format: 'url'
       }
     });
 
-    if (finishReason !== 'stop' || !media?.url || !content) {
+    if (!media?.url) {
         throw new Error('No media URL returned from OpenAI. Check OpenAI API response.');
-    }
-
-    const timingData = content.find(part => part.data?.words)?.data;
-    if (!timingData || !timingData.words) {
-      throw new Error('Word timing information was not returned from the API.');
     }
 
     try {
@@ -60,9 +49,8 @@ export const generateSpeechWithTimingsFlow = ai.defineFlow(
         const base64Audio = Buffer.from(audioBuffer).toString('base64');
         const audioDataUri = `data:audio/mp3;base64,${base64Audio}`;
 
-        const result: z.infer<typeof GenerateSpeechWithTimingsOutputSchema> = {
+        const result: z.infer<typeof GenerateSpeechOutputSchema> = {
             audioDataUri: audioDataUri,
-            words: timingData.words,
         };
 
         return result;

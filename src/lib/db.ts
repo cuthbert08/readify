@@ -4,7 +4,6 @@
 import { kv } from '@vercel/kv';
 import { getSession, type SessionPayload } from './session';
 import { randomUUID } from 'crypto';
-import type { WordTimestamp } from '@/ai/schemas';
 
 export interface Document {
   id: string;
@@ -12,7 +11,6 @@ export interface Document {
   fileName: string;
   pdfUrl: string;
   audioUrl: string | null;
-  words: WordTimestamp[] | null;
   zoomLevel: number;
   createdAt: string; 
 }
@@ -52,7 +50,6 @@ export async function saveDocument(docData: {
   fileName: string;
   pdfUrl: string;
   audioUrl?: string | null;
-  words?: WordTimestamp[] | null;
   zoomLevel?: number;
 }): Promise<Document> {
   const session = await getSession();
@@ -77,7 +74,6 @@ export async function saveDocument(docData: {
       ...existingDocRaw,
       ...docData,
       audioUrl: docData.audioUrl !== undefined ? docData.audioUrl : existingDocRaw.audioUrl,
-      words: docData.words !== undefined ? docData.words : existingDocRaw.words,
       zoomLevel: docData.zoomLevel !== undefined ? docData.zoomLevel : existingDocRaw.zoomLevel,
     };
     await kv.set(`doc:${docId}`, updatedDoc);
@@ -91,7 +87,6 @@ export async function saveDocument(docData: {
       fileName: docData.fileName,
       pdfUrl: docData.pdfUrl,
       audioUrl: docData.audioUrl || null,
-      words: docData.words || null,
       zoomLevel: docData.zoomLevel || 1,
       createdAt: new Date().toISOString(),
     };
