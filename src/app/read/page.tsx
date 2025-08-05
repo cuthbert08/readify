@@ -707,203 +707,206 @@ export default function ReadPage() {
       <TooltipProvider>
         <div className="flex h-screen w-full bg-background">
           <input type="file" ref={fileInputRef} onChange={handleFileChange} accept="application/pdf" className="hidden" />
-          <Sidebar>
-            <SidebarHeader>
-                <div className="flex items-center justify-between">
-                  <h1 className="text-2xl font-headline text-primary flex items-center gap-2"><BarChart /> Readify</h1>
-                  <ThemeToggle />
-                </div>
-            </SidebarHeader>
-            <SidebarContent>
-              <SidebarMenu>
-                 
-                <SidebarMenuItem>
-                  <SidebarMenuButton onClick={() => fileInputRef.current?.click()}>
-                    <UploadCloud />
-                    Upload New PDF
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-                  <Separator className="my-2" />
-                  <div>
-                    <div className="p-2 text-sm font-semibold flex items-center gap-2 text-muted-foreground">
-                        <Settings />
-                        Audio Settings
+          
+          { !isFullScreen && (
+            <Sidebar>
+                <SidebarHeader>
+                    <div className="flex items-center justify-between">
+                    <h1 className="text-2xl font-headline text-primary flex items-center gap-2"><BarChart /> Readify</h1>
+                    <ThemeToggle />
                     </div>
-                    <div className="p-2 space-y-4">
-                        <div className='space-y-2'>
-                            <Label>Voice</Label>
-                            <Select value={selectedVoice} onValueChange={setSelectedVoice} disabled={isSpeaking || isGeneratingSpeech}>
-                                <SelectTrigger>
-                                    <SelectValue>
-                                      {availableVoices.find(v => v.name === selectedVoice)?.displayName || selectedVoice}
-                                      ({availableVoices.find(v => v.name === selectedVoice)?.gender})
-                                    </SelectValue>
-                                </SelectTrigger>
-                                <SelectContent>
-                                    {availableVoices.map((voice) => (
-                                    <div key={voice.name} className="flex items-center justify-between pr-2">
-                                        <SelectItem value={voice.name} className="flex-1">
-                                            {voice.displayName} ({voice.gender})
-                                        </SelectItem>
-                                        <Button 
-                                            variant="ghost" 
-                                            size="icon" 
-                                            className="h-7 w-7 ml-2 shrink-0"
-                                            onClick={(e) => {
-                                                e.stopPropagation();
-                                                handlePreviewVoice(voice.name);
-                                            }}
-                                            aria-label={`Preview voice ${voice.name}`}
-                                        >
-                                            <Volume2 className="h-4 w-4" />
-                                        </Button>
-                                    </div>
-                                    ))}
-                                </SelectContent>
-                            </Select>
+                </SidebarHeader>
+                <SidebarContent>
+                <SidebarMenu>
+                    
+                    <SidebarMenuItem>
+                    <SidebarMenuButton onClick={() => fileInputRef.current?.click()}>
+                        <UploadCloud />
+                        Upload New PDF
+                    </SidebarMenuButton>
+                    </SidebarMenuItem>
+                    <Separator className="my-2" />
+                    <div>
+                        <div className="p-2 text-sm font-semibold flex items-center gap-2 text-muted-foreground">
+                            <Settings />
+                            Audio Settings
                         </div>
-                        <div className='space-y-2'>
-                            <Label htmlFor="speaking-rate">Speaking Rate: {speakingRate.toFixed(2)}x</Label>
-                            <Slider id="speaking-rate" min={0.25} max={4.0} step={0.25} value={[speakingRate]} onValueChange={(v) => setSpeakingRate(v[0])} disabled={isSpeaking || isGeneratingSpeech} />
-                        </div>
-                    </div>
-                  </div>
-
-                <Separator className="my-2" />
-                  <div>
-                  <div className="p-2 text-sm font-semibold flex items-center gap-2 text-muted-foreground">
-                    <Bot />
-                    AI Tools
-                  </div>
-                    <SidebarMenuItem>
-                      <SidebarMenuButton onClick={() => handleAiAction('summary')} disabled={pdfState !== 'loaded'}>
-                        <Lightbulb />
-                        Summarize & Key Points
-                      </SidebarMenuButton>
-                    </SidebarMenuItem>
-                    <SidebarMenuItem>
-                      <SidebarMenuButton onClick={() => handleAiAction('glossary')} disabled={pdfState !== 'loaded'}>
-                        <BookOpenCheck />
-                        Create Glossary
-                      </SidebarMenuButton>
-                    </SidebarMenuItem>
-                    <SidebarMenuItem>
-                        <SidebarMenuButton onClick={() => handleAiAction('quiz')} disabled={pdfState !== 'loaded'}>
-                            <BrainCircuit />
-                            Generate Quiz
-                        </SidebarMenuButton>
-                    </SidebarMenuItem>
-                    <SidebarMenuItem>
-                      <SidebarMenuButton onClick={() => handleAiAction('chat')} disabled={pdfState !== 'loaded'}>
-                        <HelpCircle />
-                        Ask a Question
-                      </SidebarMenuButton>
-                    </SidebarMenuItem>
-                  </div>
-                <Separator className="my-2" />
-                <div>
-                    <div className="p-2 text-sm font-semibold flex items-center gap-2 text-muted-foreground">
-                      <Library />
-                      My Documents
-                    </div>
-                     <div className="px-2">
-                        {activeDoc && !activeDoc.id && (
-                          <div className={cn(
-                            "flex w-full items-center gap-2 overflow-hidden rounded-md p-2 text-left text-sm",
-                            "bg-sidebar-accent font-medium text-sidebar-accent-foreground mb-1"
-                          )}>
-                          <FileText />
-                          <div className="flex-1 flex items-center justify-between">
-                             <Tooltip>
-                                <TooltipTrigger asChild>
-                                    <span className="truncate max-w-[150px]">{fileName}</span>
-                                </TooltipTrigger>
-                                <TooltipContent><p>{fileName}</p></TooltipContent>
-                             </Tooltip>
-                             <Tooltip>
-                                <TooltipTrigger asChild>
-                                     <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => isGeneratingSpeech || handlePlayPause()} disabled={isSaving || isGeneratingSpeech}>
-                                        {isSaving || isGeneratingSpeech ? <Loader2 className="h-4 w-4 animate-spin"/> : <CloudOff className="h-4 w-4 text-destructive" />}
-                                    </Button>
-                                </TooltipTrigger>
-                                <TooltipContent>
-                                    <p>Not saved. Generate audio to save to cloud.</p>
-                                </TooltipContent>
-                            </Tooltip>
-                          </div>
-                          </div>
-                        )}
-                        {userDocuments.map((doc) => (
-                          <div key={doc.id} className={cn(
-                              "flex w-full items-center gap-2 overflow-hidden rounded-md p-2 text-left text-sm mb-1 group",
-                              activeDoc?.id === doc.id && "bg-sidebar-accent font-medium text-sidebar-accent-foreground"
-                          )}>
-                              <FileText />
-                              <div className="flex-1 flex items-center justify-between">
-                                <Tooltip>
-                                  <TooltipTrigger asChild>
-                                      <button onClick={() => handleSelectDocument(doc)} className="truncate max-w-[150px] text-left hover:underline">
-                                          {doc.fileName}
-                                      </button>
-                                  </TooltipTrigger>
-                                  <TooltipContent><p>{doc.fileName}</p></TooltipContent>
-                                </Tooltip>
-                                <div className="flex items-center">
-                                    <Tooltip>
-                                      <TooltipTrigger asChild>
-                                        <Cloud className="h-4 w-4 text-primary" />
-                                      </TooltipTrigger>
-                                      <TooltipContent>
-                                          <p>Saved to cloud</p>
-                                      </TooltipContent>
-                                    </Tooltip>
-                                     <Tooltip>
-                                        <TooltipTrigger asChild>
-                                             <Button variant="ghost" size="icon" className="h-7 w-7 opacity-0 group-hover:opacity-100" onClick={() => handleDeleteDocument(doc.id)}>
-                                                <Trash2 className="h-4 w-4 text-destructive" />
+                        <div className="p-2 space-y-4">
+                            <div className='space-y-2'>
+                                <Label>Voice</Label>
+                                <Select value={selectedVoice} onValueChange={setSelectedVoice} disabled={isSpeaking || isGeneratingSpeech}>
+                                    <SelectTrigger>
+                                        <SelectValue>
+                                        {availableVoices.find(v => v.name === selectedVoice)?.displayName || selectedVoice}
+                                        ({availableVoices.find(v => v.name === selectedVoice)?.gender})
+                                        </SelectValue>
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {availableVoices.map((voice) => (
+                                        <div key={voice.name} className="flex items-center justify-between pr-2">
+                                            <SelectItem value={voice.name} className="flex-1">
+                                                {voice.displayName} ({voice.gender})
+                                            </SelectItem>
+                                            <Button 
+                                                variant="ghost" 
+                                                size="icon" 
+                                                className="h-7 w-7 ml-2 shrink-0"
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    handlePreviewVoice(voice.name);
+                                                }}
+                                                aria-label={`Preview voice ${voice.name}`}
+                                            >
+                                                <Volume2 className="h-4 w-4" />
                                             </Button>
+                                        </div>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                            <div className='space-y-2'>
+                                <Label htmlFor="speaking-rate">Speaking Rate: {speakingRate.toFixed(2)}x</Label>
+                                <Slider id="speaking-rate" min={0.25} max={4.0} step={0.25} value={[speakingRate]} onValueChange={(v) => setSpeakingRate(v[0])} disabled={isSpeaking || isGeneratingSpeech} />
+                            </div>
+                        </div>
+                    </div>
+
+                    <Separator className="my-2" />
+                    <div>
+                    <div className="p-2 text-sm font-semibold flex items-center gap-2 text-muted-foreground">
+                        <Bot />
+                        AI Tools
+                    </div>
+                        <SidebarMenuItem>
+                        <SidebarMenuButton onClick={() => handleAiAction('summary')} disabled={pdfState !== 'loaded'}>
+                            <Lightbulb />
+                            Summarize & Key Points
+                        </SidebarMenuButton>
+                        </SidebarMenuItem>
+                        <SidebarMenuItem>
+                        <SidebarMenuButton onClick={() => handleAiAction('glossary')} disabled={pdfState !== 'loaded'}>
+                            <BookOpenCheck />
+                            Create Glossary
+                        </SidebarMenuButton>
+                        </SidebarMenuItem>
+                        <SidebarMenuItem>
+                            <SidebarMenuButton onClick={() => handleAiAction('quiz')} disabled={pdfState !== 'loaded'}>
+                                <BrainCircuit />
+                                Generate Quiz
+                            </SidebarMenuButton>
+                        </SidebarMenuItem>
+                        <SidebarMenuItem>
+                        <SidebarMenuButton onClick={() => handleAiAction('chat')} disabled={pdfState !== 'loaded'}>
+                            <HelpCircle />
+                            Ask a Question
+                        </SidebarMenuButton>
+                        </SidebarMenuItem>
+                    </div>
+                    <Separator className="my-2" />
+                    <div>
+                        <div className="p-2 text-sm font-semibold flex items-center gap-2 text-muted-foreground">
+                        <Library />
+                        My Documents
+                        </div>
+                        <div className="px-2">
+                            {activeDoc && !activeDoc.id && (
+                            <div className={cn(
+                                "flex w-full items-center gap-2 overflow-hidden rounded-md p-2 text-left text-sm",
+                                "bg-sidebar-accent font-medium text-sidebar-accent-foreground mb-1"
+                            )}>
+                            <FileText />
+                            <div className="flex-1 flex items-center justify-between">
+                                <Tooltip>
+                                    <TooltipTrigger asChild>
+                                        <span className="truncate max-w-[150px]">{fileName}</span>
+                                    </TooltipTrigger>
+                                    <TooltipContent><p>{fileName}</p></TooltipContent>
+                                </Tooltip>
+                                <Tooltip>
+                                    <TooltipTrigger asChild>
+                                        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => isGeneratingSpeech || handlePlayPause()} disabled={isSaving || isGeneratingSpeech}>
+                                            {isSaving || isGeneratingSpeech ? <Loader2 className="h-4 w-4 animate-spin"/> : <CloudOff className="h-4 w-4 text-destructive" />}
+                                        </Button>
+                                    </TooltipTrigger>
+                                    <TooltipContent>
+                                        <p>Not saved. Generate audio to save to cloud.</p>
+                                    </TooltipContent>
+                                </Tooltip>
+                            </div>
+                            </div>
+                            )}
+                            {userDocuments.map((doc) => (
+                            <div key={doc.id} className={cn(
+                                "flex w-full items-center gap-2 overflow-hidden rounded-md p-2 text-left text-sm mb-1 group",
+                                activeDoc?.id === doc.id && "bg-sidebar-accent font-medium text-sidebar-accent-foreground"
+                            )}>
+                                <FileText />
+                                <div className="flex-1 flex items-center justify-between">
+                                    <Tooltip>
+                                    <TooltipTrigger asChild>
+                                        <button onClick={() => handleSelectDocument(doc)} className="truncate max-w-[150px] text-left hover:underline">
+                                            {doc.fileName}
+                                        </button>
+                                    </TooltipTrigger>
+                                    <TooltipContent><p>{doc.fileName}</p></TooltipContent>
+                                    </Tooltip>
+                                    <div className="flex items-center">
+                                        <Tooltip>
+                                        <TooltipTrigger asChild>
+                                            <Cloud className="h-4 w-4 text-primary" />
                                         </TooltipTrigger>
                                         <TooltipContent>
-                                            <p>Delete document</p>
+                                            <p>Saved to cloud</p>
                                         </TooltipContent>
-                                    </Tooltip>
+                                        </Tooltip>
+                                        <Tooltip>
+                                            <TooltipTrigger asChild>
+                                                <Button variant="ghost" size="icon" className="h-7 w-7 opacity-0 group-hover:opacity-100" onClick={() => handleDeleteDocument(doc.id)}>
+                                                    <Trash2 className="h-4 w-4 text-destructive" />
+                                                </Button>
+                                            </TooltipTrigger>
+                                            <TooltipContent>
+                                                <p>Delete document</p>
+                                            </TooltipContent>
+                                        </Tooltip>
+                                    </div>
                                 </div>
-                              </div>
-                          </div>
-                        ))}
+                            </div>
+                            ))}
+                        </div>
                     </div>
+                </SidebarMenu>
+                </SidebarContent>
+                <SidebarFooter>
+                {isAdmin && (
+                    <>
+                        <SidebarMenu>
+                        <SidebarMenuItem>
+                            <SidebarMenuButton onClick={() => router.push('/admin')}>
+                                <Settings />
+                                Admin Dashboard
+                            </SidebarMenuButton>
+                        </SidebarMenuItem>
+                        </SidebarMenu>
+                        <Separator />
+                    </>
+                    )}
+                <div className="flex items-center gap-3 p-2">
+                    <Avatar>
+                    <AvatarImage data-ai-hint="user avatar" src="https://placehold.co/40x40.png" />
+                    <AvatarFallback>{userEmail.charAt(0).toUpperCase()}</AvatarFallback>
+                    </Avatar>
+                    <div className="flex-1 overflow-hidden">
+                    <p className="text-sm font-medium truncate" onClick={() => router.push('/profile')} style={{cursor: 'pointer'}}>{userEmail}</p>
+                    </div>
+                    <Button onClick={handleLogout} variant="ghost" size="icon">
+                        <LogOut className="h-5 w-5"/>
+                        <span className="sr-only">Log out</span>
+                    </Button>
                 </div>
-              </SidebarMenu>
-            </SidebarContent>
-            <SidebarFooter>
-               {isAdmin && (
-                  <>
-                    <SidebarMenu>
-                      <SidebarMenuItem>
-                          <SidebarMenuButton onClick={() => router.push('/admin')}>
-                            <Settings />
-                            Admin Dashboard
-                          </SidebarMenuButton>
-                      </SidebarMenuItem>
-                    </SidebarMenu>
-                    <Separator />
-                  </>
-                )}
-              <div className="flex items-center gap-3 p-2">
-                <Avatar>
-                  <AvatarImage data-ai-hint="user avatar" src="https://placehold.co/40x40.png" />
-                  <AvatarFallback>{userEmail.charAt(0).toUpperCase()}</AvatarFallback>
-                </Avatar>
-                <div className="flex-1 overflow-hidden">
-                  <p className="text-sm font-medium truncate" onClick={() => router.push('/profile')} style={{cursor: 'pointer'}}>{userEmail}</p>
-                </div>
-                <Button onClick={handleLogout} variant="ghost" size="icon">
-                    <LogOut className="h-5 w-5"/>
-                    <span className="sr-only">Log out</span>
-                </Button>
-              </div>
-            </SidebarFooter>
-          </Sidebar>
+                </SidebarFooter>
+            </Sidebar>
+          )}
           
           <div className="flex-1 flex flex-col relative" ref={viewerContainerRef} onMouseUp={() => selection && setSelection(null)}>
             <main className="flex-1 flex items-center justify-center overflow-auto bg-muted/30">
