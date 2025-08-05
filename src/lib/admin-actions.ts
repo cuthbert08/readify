@@ -97,9 +97,11 @@ export async function deleteUser(userId: string): Promise<{ success: boolean; me
     
     if (docIds.length > 0) {
       const validDocIds = docIds.filter(id => id);
-      const docKeysToDelete = validDocIds.map(id => `doc:${id}`);
-      // @ts-ignore
-      pipeline.del(...docKeysToDelete);
+      if (validDocIds.length > 0) {
+        const docKeysToDelete = validDocIds.map(id => `doc:${id}`);
+        // @ts-ignore
+        pipeline.del(...docKeysToDelete);
+      }
     }
     
     pipeline.del(docListKey);
