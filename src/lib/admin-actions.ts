@@ -46,15 +46,19 @@ export async function getAllDocuments(): Promise<Document[]> {
     const userDocListKeys = await kv.keys('user:*:docs');
     if (userDocListKeys.length === 0) return [];
 
-    const allDocIdArrays = await kv.mget<string[]>(...userDocListKeys);
-    const allDocIds = allDocIdArrays.flat().filter(id => id); 
-
+    let allDocIds: string[] = [];
+    for (const key of userDocListKeys) {
+        // Correctly fetch all members from the list
+        const docIds = await kv.lrange(key, 0, -1);
+        allDocIds.push(...docIds);
+    }
+    
     if (allDocIds.length === 0) return [];
     
-    const uniqueDocIds = [...new Set(allDocIds)];
-    const docKeys = uniqueDocIds.map(id => `doc:${id}`);
+    const uniqueDocIds = [...new Set(allDocIds.filter(id => id))];
+    if (uniqueDocIds.length === 0) return [];
 
-    if (docKeys.length === 0) return [];
+    const docKeys = uniqueDocIds.map(id => `doc:${id}`);
     
     const docs = await kv.mget<Document[]>(...docKeys);
     
