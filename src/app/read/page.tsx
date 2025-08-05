@@ -35,6 +35,7 @@ import TextSelectionMenu from '@/components/text-selection-menu';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Textarea } from '@/components/ui/textarea';
 import { Card } from '@/components/ui/card';
+import { ThemeToggle } from '@/components/theme-toggle';
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
   'pdfjs-dist/build/pdf.worker.min.mjs',
@@ -710,6 +711,7 @@ export default function ReadPage() {
             <SidebarHeader>
                 <div className="flex items-center justify-between">
                   <h1 className="text-2xl font-headline text-primary flex items-center gap-2"><BarChart /> Readify</h1>
+                  <ThemeToggle />
                 </div>
             </SidebarHeader>
             <SidebarContent>
@@ -893,7 +895,7 @@ export default function ReadPage() {
                   <AvatarFallback>{userEmail.charAt(0).toUpperCase()}</AvatarFallback>
                 </Avatar>
                 <div className="flex-1 overflow-hidden">
-                  <p className="text-sm font-medium truncate">{userEmail}</p>
+                  <p className="text-sm font-medium truncate" onClick={() => router.push('/profile')} style={{cursor: 'pointer'}}>{userEmail}</p>
                 </div>
                 <Button onClick={handleLogout} variant="ghost" size="icon">
                     <LogOut className="h-5 w-5"/>
