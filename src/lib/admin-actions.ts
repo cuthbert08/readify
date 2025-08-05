@@ -17,6 +17,10 @@ export interface Document {
   createdAt: string; 
 }
 
+export interface DocumentWithAuthorEmail extends Document {
+    ownerEmail: string;
+}
+
 // Re-export User type from db to ensure consistency
 export type User = DbUser;
 
@@ -41,35 +45,46 @@ export async function getAllUsers(): Promise<User[]> {
     .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 }
 
-export async function getAllDocuments(): Promise<Document[]> {
+export async function getAllDocuments(): Promise<DocumentWithAuthorEmail[]> {
     await checkAdmin();
-    const allUserKeys = await kv.keys('user-by-id:*');
 
+    const users = await getAllUsers();
+    const userEmailMap = new Map(users.map(u => [u.id, u.email]));
+
+    const allUserKeys = await kv.keys('user-by-id:*');
     if (allUserKeys.length === 0) {
         return [];
     }
 
     const userIds = allUserKeys.map(key => key.replace('user-by-id:', ''));
-    let allDocIds: string[] = [];
-
-    for (const userId of userIds) {
-        const docListKey = `user:${userId}:docs`;
-        const docIds = await kv.lrange(docListKey, 0, -1);
-        allDocIds.push(...docIds);
+    
+    if (userIds.length === 0) {
+        return [];
     }
     
+    const pipeline = kv.pipeline();
+    userIds.forEach(userId => pipeline.lrange(`user:${userId}:docs`, 0, -1));
+    const allDocIdLists = await pipeline.exec() as string[][];
+    
+    const allDocIds = allDocIdLists.flat();
+
     const uniqueDocIds = [...new Set(allDocIds.filter(id => id))];
 
     if (uniqueDocIds.length === 0) {
         return [];
     }
-
+    
     const docKeys = uniqueDocIds.map(id => `doc:${id}`);
     const allDocs = await kv.mget<Document[]>(...docKeys);
     
     const validDocs = allDocs.filter((d): d is Document => d !== null);
 
-    return validDocs.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    const docsWithAuthorEmail = validDocs.map(doc => ({
+        ...doc,
+        ownerEmail: userEmailMap.get(doc.userId) || 'Unknown User'
+    }));
+
+    return docsWithAuthorEmail.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 }
 
 

@@ -9,7 +9,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
 import { getAllUsers, getAllDocuments, deleteUser } from '@/lib/admin-actions';
-import type { User, Document } from '@/lib/admin-actions';
+import type { User, DocumentWithAuthorEmail as Document } from '@/lib/admin-actions';
 import AddUserDialog from '@/components/add-user-dialog';
 
 export default function AdminPage() {
@@ -98,7 +98,6 @@ export default function AdminPage() {
                 <TableHeader>
                 <TableRow>
                     <TableHead>Email</TableHead>
-                    <TableHead>User ID</TableHead>
                     <TableHead>Role</TableHead>
                     <TableHead>Signed Up</TableHead>
                     <TableHead>Actions</TableHead>
@@ -108,7 +107,6 @@ export default function AdminPage() {
                 {users.map(user => (
                     <TableRow key={user.id}>
                     <TableCell>{user.email}</TableCell>
-                    <TableCell>{user.id}</TableCell>
                     <TableCell>{user.isAdmin ? 'Admin' : 'User'}</TableCell>
                     <TableCell>{new Date(user.createdAt).toLocaleDateString()}</TableCell>
                     <TableCell>
@@ -134,7 +132,7 @@ export default function AdminPage() {
                 <TableHeader>
                 <TableRow>
                     <TableHead>File Name</TableHead>
-                    <TableHead>Owner (User ID)</TableHead>
+                    <TableHead>Owner (Email)</TableHead>
                     <TableHead>Uploaded</TableHead>
                     <TableHead>Link</TableHead>
                 </TableRow>
@@ -143,7 +141,7 @@ export default function AdminPage() {
                 {documents.map(doc => (
                     <TableRow key={doc.id}>
                     <TableCell>{doc.fileName}</TableCell>
-                    <TableCell>{doc.userId}</TableCell>
+                    <TableCell>{doc.ownerEmail}</TableCell>
                     <TableCell>{new Date(doc.createdAt).toLocaleDateString()}</TableCell>
                     <TableCell>
                         <a href={doc.pdfUrl} target="_blank" rel="noopener noreferrer">
