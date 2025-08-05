@@ -11,11 +11,6 @@ import { ai } from '@/ai/genkit';
 import { GenerateSpeechWithTimingsInputSchema, GenerateSpeechWithTimingsOutputSchema } from '@/ai/schemas';
 import { z } from 'genkit';
 
-export async function generateSpeechWithTimings(input: z.infer<typeof GenerateSpeechWithTimingsInputSchema>): Promise<z.infer<typeof GenerateSpeechWithTimingsOutputSchema>> {
-    return generateSpeechWithTimingsFlow(input);
-}
-
-
 export const generateSpeechWithTimingsFlow = ai.defineFlow(
   {
     name: 'generateSpeechWithTimingsFlow',
@@ -40,6 +35,9 @@ export const generateSpeechWithTimingsFlow = ai.defineFlow(
             timestamp_granularities: ["word"]
         }
       },
+      output: {
+        format: 'url'
+      }
     });
 
     if (finishReason !== 'stop' || !media?.url || !content) {
