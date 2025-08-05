@@ -889,9 +889,9 @@ export default function ReadPage() {
           )}
           
           <div className="flex-1 flex flex-col relative" ref={viewerContainerRef}>
-            <main className="flex-1 flex items-center justify-center overflow-auto bg-muted/30">
+             <main className="flex-1 flex items-center justify-center overflow-auto bg-muted/30">
                 {pdfState !== 'loaded' && renderContent()}
-                <div className="w-full h-full relative" style={{ display: pdfState === 'loaded' ? 'block' : 'none' }}>
+                <div className={cn("w-full h-full relative", pdfState === 'loaded' ? 'flex items-center justify-center' : 'hidden')}>
                    <PdfViewer 
                         pdfDoc={activeDoc?.doc || null} 
                         scale={zoomLevel} 
