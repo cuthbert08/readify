@@ -57,7 +57,6 @@ const PageCanvas: React.FC<{
                     transform: `scaleX(${tx[0]})`,
                     position: 'absolute',
                     whiteSpace: 'pre',
-                    color: 'transparent',
                     WebkitFontSmoothing: 'antialiased',
                     transformOrigin: '0% 0%',
                 };
