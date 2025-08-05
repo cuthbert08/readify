@@ -48,7 +48,6 @@ export async function getAllDocuments(): Promise<Document[]> {
 
     let allDocIds: string[] = [];
     for (const key of userDocListKeys) {
-        // Correctly fetch all members from the list
         const docIds = await kv.lrange(key, 0, -1);
         allDocIds.push(...docIds);
     }
@@ -58,13 +57,20 @@ export async function getAllDocuments(): Promise<Document[]> {
     const uniqueDocIds = [...new Set(allDocIds.filter(id => id))];
     if (uniqueDocIds.length === 0) return [];
 
-    const docKeys = uniqueDocIds.map(id => `doc:${id}`);
+    const allDocs: Document[] = [];
+    const BATCH_SIZE = 100; 
+
+    for (let i = 0; i < uniqueDocIds.length; i += BATCH_SIZE) {
+        const batchIds = uniqueDocIds.slice(i, i + BATCH_SIZE);
+        const docKeys = batchIds.map(id => `doc:${id}`);
+        if (docKeys.length > 0) {
+            const docsBatch = await kv.mget<Document[]>(...docKeys);
+            const validDocs = docsBatch.filter((d): d is Document => d !== null && d.id !== undefined && d.fileName !== undefined);
+            allDocs.push(...validDocs);
+        }
+    }
     
-    const docs = await kv.mget<Document[]>(...docKeys);
-    
-    return docs
-      .filter((d): d is Document => d !== null && d.id !== undefined && d.fileName !== undefined)
-      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    return allDocs.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 }
 
 
