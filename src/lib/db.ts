@@ -1,3 +1,4 @@
+
 'use server';
 
 import { kv } from '@vercel/kv';
@@ -144,15 +145,12 @@ export async function deleteDocument(docId: string): Promise<{ success: boolean,
             throw new Error('You do not have permission to delete this document.');
         }
 
-        // Delete files from Vercel Blob by extracting the pathname from the URL and removing the leading slash
-        const urlsToDelete = [new URL(doc.pdfUrl).pathname.substring(1)];
+        const urlsToDelete = [doc.pdfUrl];
         if (doc.audioUrl) {
-            urlsToDelete.push(new URL(doc.audioUrl).pathname.substring(1));
+            urlsToDelete.push(doc.audioUrl);
         }
-
-        if(urlsToDelete.length > 0) {
-            await deleteBlob(urlsToDelete);
-        }
+        
+        await deleteBlob(urlsToDelete);
 
         // Delete from KV
         const pipeline = kv.pipeline();
