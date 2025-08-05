@@ -12,7 +12,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { getAvailableVoices, AvailableVoicesOutput } from '@/ai/flows/voice-selection';
-import { generateSpeechWithTimings } from '@/ai/flows/generate-speech-with-timings';
+import { generateSpeechWithTimingsFlow } from '@/ai/flows/generate-speech-with-timings';
 import { previewSpeech } from '@/ai/flows/preview-speech';
 import { summarizePdf, SummarizePdfOutput } from '@/ai/flows/summarize-pdf';
 import { chatWithPdf, ChatWithPdfOutput } from '@/ai/flows/chat-with-pdf';
@@ -388,7 +388,7 @@ export default function ReadPage() {
         }
         
         setProcessingStage('generating');
-        const result = await generateSpeechWithTimings({
+        const result = await generateSpeechWithTimingsFlow({
           text: cleanedText,
           voice: selectedVoice as any,
           speakingRate: speakingRate,
@@ -465,7 +465,7 @@ export default function ReadPage() {
         setIsSynthesizing(true);
         setSynthesisAudioUrl(null);
         try {
-            const result = await generateSpeechWithTimings({
+            const result = await generateSpeechWithTimingsFlow({
                 text: synthesisText,
                 voice: synthesisVoice as any,
                 speakingRate: synthesisRate
