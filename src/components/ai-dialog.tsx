@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, { useState } from 'react';
@@ -16,7 +17,6 @@ import { Loader2, Send } from 'lucide-react';
 import type { SummarizePdfOutput } from '@/ai/flows/summarize-pdf';
 import type { ChatWithPdfOutput } from '@/ai/flows/chat-with-pdf';
 import type { GenerateGlossaryOutput } from '@/ai/flows/glossary-flow';
-import type { ExplainTextOutput } from '@/ai/flows/explain-text-flow';
 import type { GenerateQuizOutput } from '@/ai/schemas/quiz';
 import type { QuizQuestion } from '@/ai/schemas/quiz';
 import { ScrollArea } from './ui/scroll-area';
@@ -26,7 +26,7 @@ import { RadioGroup, RadioGroupItem } from './ui/radio-group';
 import { Label } from './ui/label';
 import { cn } from '@/lib/utils';
 
-export type AiDialogType = 'summary' | 'key-points' | 'chat' | 'glossary' | 'explain' | 'quiz';
+export type AiDialogType = 'summary' | 'key-points' | 'chat' | 'glossary' | 'quiz';
 
 type AiDialogProps = {
   open: boolean;
@@ -36,7 +36,7 @@ type AiDialogProps = {
   summaryOutput: SummarizePdfOutput | null;
   chatOutput: ChatWithPdfOutput | null;
   glossaryOutput: GenerateGlossaryOutput | null;
-  explanationOutput: ExplainTextOutput | null;
+  explanationOutput: { explanation: string } | null;
   quizOutput: GenerateQuizOutput | null;
   onChatSubmit: (question: string) => void;
 };
@@ -125,22 +125,6 @@ const AiDialog: React.FC<AiDialogProps> = ({
                         </AccordionItem>
                     ))}
                 </Accordion>
-            )}
-        </ScrollArea>
-    </>
-  );
-  
-  const renderExplanationContent = () => (
-    <>
-        <DialogHeader>
-            <DialogTitle>Explanation</DialogTitle>
-            <DialogDescription>Here is a simplified explanation of the selected text.</DialogDescription>
-        </DialogHeader>
-        <ScrollArea className="h-auto max-h-96 pr-4 mt-4">
-            {isLoading ? renderLoading('Thinking...') : (
-                <p className="text-sm text-muted-foreground whitespace-pre-wrap">
-                    {explanationOutput?.explanation || 'No explanation available.'}
-                </p>
             )}
         </ScrollArea>
     </>
@@ -291,8 +275,6 @@ const AiDialog: React.FC<AiDialogProps> = ({
             return renderSummaryContent();
         case 'glossary':
             return renderGlossaryContent();
-        case 'explain':
-            return renderExplanationContent();
         case 'quiz':
             return renderQuizContent();
         case 'chat':

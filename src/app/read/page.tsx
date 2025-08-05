@@ -17,7 +17,6 @@ import { previewSpeech } from '@/ai/flows/preview-speech';
 import { summarizePdf, SummarizePdfOutput } from '@/ai/flows/summarize-pdf';
 import { chatWithPdf, ChatWithPdfOutput } from '@/ai/flows/chat-with-pdf';
 import { generateGlossary, GenerateGlossaryOutput, GlossaryItem } from '@/ai/flows/glossary-flow';
-import { explainText, ExplainTextOutput } from '@/ai/flows/explain-text-flow';
 import { generateQuiz, type GenerateQuizOutput } from '@/ai/flows/quiz-flow';
 import { cleanPdfText } from '@/ai/flows/clean-text-flow';
 import { Sidebar, SidebarHeader, SidebarMenu, SidebarMenuItem, SidebarMenuButton, SidebarFooter, SidebarContent } from '@/components/ui/sidebar';
@@ -31,7 +30,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Label } from '@/components/ui/label';
 import { Slider } from '@/components/ui/slider';
 import { Volume2 } from 'lucide-react';
-import TextSelectionMenu from '@/components/text-selection-menu';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Textarea } from '@/components/ui/textarea';
 import { Card } from '@/components/ui/card';
@@ -44,13 +42,6 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
 
 type PdfState = 'idle' | 'loading' | 'loaded' | 'error';
 type ProcessingStage = 'idle' | 'cleaning' | 'generating' | 'error';
-type TextItem = {
-    text: string;
-    transform: number[];
-    width: number;
-    height: number;
-    pageNumber: number;
-};
 type ActiveDocument = {
   id: string | null;
   file: File | null;
@@ -90,14 +81,12 @@ export default function ReadPage() {
     const [aiSummaryOutput, setAiSummaryOutput] = useState<SummarizePdfOutput | null>(null);
     const [aiChatOutput, setAiChatOutput] = useState<ChatWithPdfOutput | null>(null);
     const [aiGlossaryOutput, setAiGlossaryOutput] = useState<GenerateGlossaryOutput | null>(null);
-    const [aiExplanationOutput, setAiExplanationOutput] = useState<ExplainTextOutput | null>(null);
     const [aiQuizOutput, setAiQuizOutput] = useState<GenerateQuizOutput | null>(null);
     
     const [showControls, setShowControls] = useState(true);
     const [isAdmin, setIsAdmin] = useState(false);
     const [userEmail, setUserEmail] = useState('');
     
-    const [selection, setSelection] = useState<{ text: string; page: number, rect: DOMRect } | null>(null);
     const [isDragging, setIsDragging] = useState(false);
     
     const [synthesisText, setSynthesisText] = useState('');
@@ -195,7 +184,6 @@ export default function ReadPage() {
       setAiSummaryOutput(null);
       setAiChatOutput(null);
       setAiGlossaryOutput(null);
-      setAiExplanationOutput(null);
       setAiQuizOutput(null);
       if (audioRef.current) {
           audioRef.current.src = "";
@@ -506,7 +494,6 @@ export default function ReadPage() {
       setAiChatOutput(null);
       setAiSummaryOutput(null);
       setAiGlossaryOutput(null);
-      setAiExplanationOutput(null);
       setAiQuizOutput(null);
   
       try {
@@ -516,9 +503,6 @@ export default function ReadPage() {
         } else if (type === 'glossary' && documentText) {
             const result = await generateGlossary({ documentText: documentText });
             setAiGlossaryOutput(result);
-        } else if (type === 'explain' && data?.text) {
-            const result = await explainText({ text: data.text, context: documentText });
-            setAiExplanationOutput(result);
         } else if (type === 'quiz' && documentText) {
             const result = await generateQuiz({ documentText });
             setAiQuizOutput(result);
@@ -584,10 +568,6 @@ export default function ReadPage() {
         return () => clearTimeout(timer);
       }
     }, [activeDoc, fileName, isSaving, zoomLevel, processingStage]);
-
-    const handleTextSelect = (text: string, page: number, rect: DOMRect) => {
-        setSelection({text, page, rect});
-    }
     
     const getProcessingMessage = () => {
         switch (processingStage) {
@@ -908,23 +888,14 @@ export default function ReadPage() {
             </Sidebar>
           )}
           
-          <div className="flex-1 flex flex-col relative" ref={viewerContainerRef} onMouseUp={() => selection && setSelection(null)}>
+          <div className="flex-1 flex flex-col relative" ref={viewerContainerRef}>
             <main className="flex-1 flex items-center justify-center overflow-auto bg-muted/30">
                 {pdfState !== 'loaded' && renderContent()}
                 <div className="w-full h-full relative" style={{ display: pdfState === 'loaded' ? 'block' : 'none' }}>
                    <PdfViewer 
                         pdfDoc={activeDoc?.doc || null} 
                         scale={zoomLevel} 
-                        onTextSelect={handleTextSelect}
                     />
-                     {selection && viewerContainerRef.current && (
-                        <TextSelectionMenu 
-                            bounds={viewerContainerRef.current.getBoundingClientRect()}
-                            selection={selection}
-                            onExplain={() => handleAiAction('explain', {text: selection.text})}
-                            onClose={() => setSelection(null)}
-                        />
-                    )}
                 </div>
             </main>
             {pdfState === 'loaded' && (
@@ -972,7 +943,7 @@ export default function ReadPage() {
             summaryOutput={aiSummaryOutput}
             chatOutput={aiChatOutput}
             glossaryOutput={aiGlossaryOutput}
-            explanationOutput={aiExplanationOutput}
+            explanationOutput={null}
             quizOutput={aiQuizOutput}
             onChatSubmit={handleAiChat}
           />
@@ -980,5 +951,3 @@ export default function ReadPage() {
       </TooltipProvider>
     );
 }
-
-    
