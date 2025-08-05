@@ -1,3 +1,4 @@
+
 'use server';
 
 /**
@@ -48,8 +49,7 @@ const cleanPdfTextFlow = ai.defineFlow(
     outputSchema: CleanPdfTextOutputSchema,
   },
   async input => {
-    // Use a more powerful model specifically for this complex task.
-    const {output} = await prompt(input, { model: 'googleai/gemini-pro' });
+    const {output} = await prompt(input);
     return output!;
   }
 );
