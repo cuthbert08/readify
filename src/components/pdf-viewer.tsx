@@ -80,10 +80,12 @@ const PdfViewer: React.FC<PdfViewerProps> = React.memo(({ pdfDoc, scale }) => {
     }
 
     return (
-        <div className="w-full h-full p-4 overflow-auto">
-            {pages.map((page) => (
-                <PageCanvas key={`page-${page.pageNumber}`} page={page} scale={scale} />
-            ))}
+        <div className="w-full h-full p-4 overflow-auto flex justify-center">
+            <div>
+                {pages.map((page) => (
+                    <PageCanvas key={`page-${page.pageNumber}`} page={page} scale={scale} />
+                ))}
+            </div>
         </div>
     );
 });
