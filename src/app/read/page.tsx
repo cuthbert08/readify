@@ -48,6 +48,28 @@ type ActiveDocument = {
   audioUrl?: string | null;
 };
 
+// Helper function to concatenate audio blobs on the client-side
+async function mergeAudio(audioDataUris: string[]): Promise<Blob> {
+    const audioBuffers = await Promise.all(
+        audioDataUris.map(async (uri) => {
+            const response = await fetch(uri);
+            return response.arrayBuffer();
+        })
+    );
+
+    const totalLength = audioBuffers.reduce((acc, buffer) => acc + buffer.byteLength, 0);
+    const merged = new Uint8Array(totalLength);
+    
+    let offset = 0;
+    audioBuffers.forEach((buffer) => {
+        merged.set(new Uint8Array(buffer), offset);
+        offset += buffer.byteLength;
+    });
+
+    return new Blob([merged], { type: 'audio/mp3' });
+}
+
+
 export default function ReadPage() {
   const [pdfState, setPdfState] = useState<PdfState>('idle');
   const [activeDoc, setActiveDoc] = useState<ActiveDocument | null>(null);
@@ -99,6 +121,7 @@ export default function ReadPage() {
   const previewAudioRef = useRef<HTMLAudioElement | null>(null);
   const viewerContainerRef = useRef<HTMLDivElement>(null);
   const controlsTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const lastGeneratedAudioUrl = useRef<string | null>(null);
   const router = useRouter();
 
   const isGeneratingSpeech = processingStage === 'cleaning' || processingStage === 'generating';
@@ -143,6 +166,14 @@ export default function ReadPage() {
       }
     }
     fetchVoices();
+
+     // Cleanup blob URL on unmount
+    return () => {
+      if (lastGeneratedAudioUrl.current) {
+        URL.revokeObjectURL(lastGeneratedAudioUrl.current);
+      }
+    };
+
   }, [toast, fetchUserDocuments]);
 
   const handleHideControls = () => {
@@ -188,6 +219,11 @@ export default function ReadPage() {
         setAudioDuration(0);
         setAudioCurrentTime(0);
     }
+     if (lastGeneratedAudioUrl.current) {
+        URL.revokeObjectURL(lastGeneratedAudioUrl.current);
+        lastGeneratedAudioUrl.current = null;
+    }
+
 
     try {
       const loadingTask = pdfjsLib.getDocument(typeof source === 'string' ? { url: source } : { data: await source.arrayBuffer() });
@@ -259,7 +295,7 @@ export default function ReadPage() {
     await loadPdf(doc.pdfUrl, doc.id, doc);
   }
 
-  const handleSaveAfterAudio = async (audioUrl: string) => {
+  const handleSaveAfterAudio = async (audioBlob: Blob) => {
       if (!activeDoc || !activeDoc.doc) return;
 
       if (!activeDoc.file && !activeDoc.id) {
@@ -270,28 +306,36 @@ export default function ReadPage() {
       setIsSaving(true);
       try {
         let pdfUrl = activeDoc.url;
-
+        let audioUrl: string | null = null;
+        
+        // 1. Upload PDF if it's a new file
         if (activeDoc.file) {
-          const uploadResponse = await fetch('/api/upload', {
+          const uploadPdfResponse = await fetch('/api/upload', {
             method: 'POST',
             headers: { 'Content-Type': 'application/pdf', 'x-vercel-filename': activeDoc.file.name },
             body: activeDoc.file,
           });
-
-          if (!uploadResponse.ok) {
-            const errorData = await uploadResponse.json();
-            throw new Error(errorData.message || 'PDF Upload failed');
-          }
-          const blob = await uploadResponse.json();
-          pdfUrl = blob.url;
+          if (!uploadPdfResponse.ok) throw new Error('PDF Upload failed');
+          const pdfBlob = await uploadPdfResponse.json();
+          pdfUrl = pdfBlob.url;
         }
       
-        if (!pdfUrl) {
-          throw new Error("Could not determine PDF URL for saving.");
-        }
+        if (!pdfUrl) throw new Error("Could not determine PDF URL for saving.");
 
+        // 2. Upload the merged audio blob
+        const audioFileName = `${fileName.replace(/\.pdf$/i, '') || 'audio'}.mp3`;
+        const uploadAudioResponse = await fetch('/api/upload', {
+            method: 'POST',
+            headers: { 'Content-Type': 'audio/mp3', 'x-vercel-filename': audioFileName },
+            body: audioBlob,
+        });
+        if (!uploadAudioResponse.ok) throw new Error('Audio Upload failed');
+        const audioBlobResult = await uploadAudioResponse.json();
+        audioUrl = audioBlobResult.url;
+
+        // 3. Save document metadata with both URLs
         const docToSave = {
-          id: activeDoc.id, // ID can now be null
+          id: activeDoc.id,
           fileName: fileName,
           pdfUrl: pdfUrl,
           zoomLevel: zoomLevel,
@@ -326,10 +370,8 @@ export default function ReadPage() {
 
     if (isGeneratingSpeech) return;
 
-    if (activeDoc?.audioUrl && audioRef.current) {
-        if(audioRef.current.src !== activeDoc.audioUrl) {
-            audioRef.current.src = activeDoc.audioUrl;
-        }
+    // If there's already a playable source in the audio element, just play it.
+    if (audioRef.current && audioRef.current.src && audioRef.current.readyState >= 2) {
         audioRef.current.play();
         setIsSpeaking(true);
         return;
@@ -352,13 +394,10 @@ export default function ReadPage() {
       }
       
       setProcessingStage('generating');
-      //
-      // Make a fetch call to your new API route instead of importing the Server Action
+      
       const response = await fetch('/api/generate-speech', {
           method: 'POST',
-          headers: {
-              'Content-Type': 'application/json',
-          },
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
               text: cleanedText,
               voice: selectedVoice,
@@ -371,20 +410,31 @@ export default function ReadPage() {
           throw new Error(errorData.error || 'API call failed');
       }
 
-      const result = await response.json();
+      const result = await response.json(); // Expects { audioDataUris: [...] }
 
-      if (!result.audioDataUri) {
+      if (!result.audioDataUris || result.audioDataUris.length === 0) {
           throw new Error('Audio generation failed to return data.');
       }
+      
+      // Merge audio on the client-side
+      const mergedAudioBlob = await mergeAudio(result.audioDataUris);
+      const audioUrl = URL.createObjectURL(mergedAudioBlob);
+
+      // Clean up previous blob URL if it exists
+      if (lastGeneratedAudioUrl.current) {
+        URL.revokeObjectURL(lastGeneratedAudioUrl.current);
+      }
+      lastGeneratedAudioUrl.current = audioUrl;
+
 
       if (audioRef.current) {
-        audioRef.current.src = result.audioDataUri;
+        audioRef.current.src = audioUrl;
         audioRef.current.play();
         setIsSpeaking(true);
       }
 
-      setActiveDoc(prev => prev ? { ...prev, audioUrl: result.audioDataUri } : null);
-      await handleSaveAfterAudio(result.audioDataUri);
+      // Save the newly created audio blob
+      await handleSaveAfterAudio(mergedAudioBlob);
       
       setProcessingStage('idle');
 
@@ -394,13 +444,12 @@ export default function ReadPage() {
       setIsSpeaking(false);
       const errorMessage = error instanceof Error ? error.message : "An unknown error occurred";
       toast({ variant: "destructive", title: "Audio Error", description: `Could not generate audio for the document. ${errorMessage}` });
-      // Reset stage after showing error
       setTimeout(() => setProcessingStage('idle'), 2000);
     }
   };
   
-  const handleDeleteDocument = async (docId: string | null) => { // Corrected: accepts string | null
-      if (!docId) { // Added a null-check
+  const handleDeleteDocument = async (docId: string | null) => {
+      if (!docId) {
           toast({ variant: "destructive", title: "Deletion Error", description: "Invalid document ID." });
           return;
       }
@@ -412,7 +461,6 @@ export default function ReadPage() {
           if (result.success) {
               toast({ title: "Success", description: "Document deleted successfully." });
               await fetchUserDocuments();
-              // If the deleted document was the active one, reset the view
               if (activeDoc?.id === docId) {
                   setPdfState('idle');
                   setActiveDoc(null);
@@ -429,14 +477,10 @@ export default function ReadPage() {
   }
 
   const handleAudioTimeUpdate = () => {
-      if (!audioRef.current) {
-          return;
-      }
-      const currentTime = audioRef.current.currentTime;
-
-      setAudioCurrentTime(currentTime);
+      if (!audioRef.current) return;
+      setAudioCurrentTime(audioRef.current.currentTime);
       if (audioDuration > 0) {
-          setAudioProgress((currentTime / audioDuration) * 100);
+          setAudioProgress((audioRef.current.currentTime / audioDuration) * 100);
       }
   }
 
@@ -460,14 +504,14 @@ export default function ReadPage() {
       }
       setIsSynthesizing(true);
       setSynthesisAudioUrl(null);
+      if (lastGeneratedAudioUrl.current) {
+          URL.revokeObjectURL(lastGeneratedAudioUrl.current);
+          lastGeneratedAudioUrl.current = null;
+      }
       try {
-          // *** THIS IS THE KEY CHANGE ***
-          // Make a fetch call to your new API route instead of importing the Server Action
           const response = await fetch('/api/generate-speech', {
             method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-            },
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
               text: synthesisText,
               voice: synthesisVoice,
@@ -480,10 +524,13 @@ export default function ReadPage() {
             throw new Error(errorData.error || 'API call failed');
           }
 
-          const result = await response.json();
+          const result = await response.json(); // { audioDataUris: [...] }
           
-          if (result.audioDataUri) {
-              setSynthesisAudioUrl(result.audioDataUri);
+          if (result.audioDataUris && result.audioDataUris.length > 0) {
+              const mergedAudioBlob = await mergeAudio(result.audioDataUris);
+              const audioUrl = URL.createObjectURL(mergedAudioBlob);
+              lastGeneratedAudioUrl.current = audioUrl; // Track for cleanup
+              setSynthesisAudioUrl(audioUrl);
           }
       } catch (error) {
           const errorMessage = error instanceof Error ? error.message : "An unknown error occurred";
@@ -590,12 +637,12 @@ export default function ReadPage() {
   useEffect(() => {
     if (activeDoc?.id && !isSaving && processingStage === 'idle') {
       const timer = setTimeout(() => {
+        // Do not auto-save audioUrl as it's a blob url now
+        const { audioUrl, ...docToSave } = activeDoc;
         saveDocument({
-          id: activeDoc.id,
+          ...docToSave,
           fileName: fileName,
-          pdfUrl: activeDoc.url || '',
-          zoomLevel: zoomLevel,
-          audioUrl: activeDoc.audioUrl,
+          zoomLevel: zoomLevel
         }).catch(err => console.error("Failed to auto-save progress", err));
       }, 2000); 
       return () => clearTimeout(timer);
@@ -605,7 +652,7 @@ export default function ReadPage() {
   const getProcessingMessage = () => {
       switch (processingStage) {
           case 'cleaning': return 'AI is cleaning the document text...';
-          case 'generating': return 'Generating audio, this may take a moment...';
+          case 'generating': return 'Generating and merging audio...';
           case 'error': return 'An error occurred during audio generation.';
           default: return '';
       }
@@ -960,8 +1007,8 @@ export default function ReadPage() {
                         onZoomOut={() => setZoomLevel(z => Math.max(z - 0.2, 0.4))}
                         playbackRate={playbackRate}
                         onPlaybackRateChange={setPlaybackRate}
-                        showDownload={!!activeDoc?.audioUrl && processingStage === 'idle'}
-                        downloadUrl={activeDoc?.audioUrl || ''}
+                        showDownload={(!!activeDoc?.audioUrl || !!lastGeneratedAudioUrl.current) && processingStage === 'idle'}
+                        downloadUrl={lastGeneratedAudioUrl.current || activeDoc?.audioUrl || ''}
                         downloadFileName={`${fileName || 'audio'}.mp3`}
                         progress={audioProgress}
                         duration={audioDuration}

@@ -10,7 +10,7 @@ export const GenerateSpeechInputSchema = z.object({
 export type GenerateSpeechInput = z.infer<typeof GenerateSpeechInputSchema>;
 
 export const GenerateSpeechOutputSchema = z.object({
-  audioDataUri: z.string().describe("A data URI of the generated audio file. Expected format: 'data:audio/mp3;base64,<encoded_data>'."),
+  audioDataUris: z.array(z.string()).describe("An array of data URIs for the generated audio chunks. Each format: 'data:audio/mp3;base64,<encoded_data>'."),
 });
 export type GenerateSpeechOutput = z.infer<typeof GenerateSpeechOutputSchema>;
 

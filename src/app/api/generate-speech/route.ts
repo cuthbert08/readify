@@ -5,13 +5,15 @@ import { GenerateSpeechInputSchema } from '@/ai/schemas';
 
 export async function POST(req: Request) {
   try {
-    const { text, voice, speakingRate } = GenerateSpeechInputSchema.parse(await req.json());
+    const json = await req.json();
+    const { text, voice, speakingRate } = GenerateSpeechInputSchema.parse(json);
     
     const result = await generateSpeech({ text, voice, speakingRate });
 
     return NextResponse.json(result);
   } catch (error) {
     console.error('API Error:', error);
-    return NextResponse.json({ error: 'Failed to generate speech' }, { status: 500 });
+    const errorMessage = error instanceof Error ? error.message : 'Failed to generate speech';
+    return NextResponse.json({ error: errorMessage }, { status: 500 });
   }
 }
