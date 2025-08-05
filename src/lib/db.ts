@@ -144,10 +144,10 @@ export async function deleteDocument(docId: string): Promise<{ success: boolean,
             throw new Error('You do not have permission to delete this document.');
         }
 
-        // Delete files from Vercel Blob
-        const urlsToDelete = [doc.pdfUrl];
+        // Delete files from Vercel Blob by extracting the pathname from the URL
+        const urlsToDelete = [new URL(doc.pdfUrl).pathname];
         if (doc.audioUrl) {
-            urlsToDelete.push(doc.audioUrl);
+            urlsToDelete.push(new URL(doc.audioUrl).pathname);
         }
         await deleteBlob(urlsToDelete);
 
