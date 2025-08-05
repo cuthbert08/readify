@@ -6,12 +6,6 @@ import * as pdfjsLib from 'pdfjs-dist';
 import type { PDFDocumentProxy, PDFPageProxy, TextItem } from 'pdfjs-dist/types/src/display/api';
 import { Skeleton } from './ui/skeleton';
 
-type PdfViewerProps = {
-  pdfDoc: PDFDocumentProxy | null;
-  scale: number;
-  onTextSelect: (text: string, pageNumber: number, rect: DOMRect) => void;
-};
-
 // Add CSS to make the text layer selectable but invisible
 const textLayerStyle = `
 .textLayer {
@@ -67,10 +61,13 @@ const PageCanvas: React.FC<{
             viewport: viewport,
         };
 
-        const renderTask = page.render(renderContext);
+        let renderTask = page.render(renderContext);
+        
         renderTask.promise.then(async () => {
             const textContent = await page.getTextContent();
-            // This is the correct way to call renderTextLayer
+            
+            textLayer.innerHTML = '';
+
             pdfjsLib.renderTextLayer({
                 textContentSource: textContent,
                 container: textLayer,
@@ -94,8 +91,22 @@ const PageCanvas: React.FC<{
         const selectedText = range.toString().trim();
 
         if (selectedText && textLayerRef.current) {
-            const rect = range.getBoundingClientRect();
-            onTextSelect(selectedText, page.pageNumber, rect);
+            const containerRect = textLayerRef.current.getBoundingClientRect();
+            const rangeRects = range.getClientRects();
+            
+            if (rangeRects.length > 0) {
+                const firstRect = rangeRects[0];
+                const lastRect = rangeRects[rangeRects.length - 1];
+                
+                const combinedRect = new DOMRect(
+                    firstRect.left,
+                    firstRect.top,
+                    lastRect.right - firstRect.left,
+                    lastRect.bottom - firstRect.top
+                );
+
+                onTextSelect(selectedText, page.pageNumber, combinedRect);
+            }
         }
     }
 
