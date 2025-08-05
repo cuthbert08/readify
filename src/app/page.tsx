@@ -64,7 +64,7 @@ export default function AuthPage() {
             <CardContent className="space-y-4 pt-6">
               <div className="space-y-2">
                 <Label htmlFor="login-email">Email</Label>
-                <Input id="login-email" name="email" type="email" placeholder="user@example.com" required />
+                <Input id="login-email" name="email" type="email" required />
               </div>
               <div className="space-y-2 relative">
                 <Label htmlFor="login-password">Password</Label>
