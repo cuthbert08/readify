@@ -3,7 +3,7 @@
 
 import React, { useRef, useEffect, useState, useCallback } from 'react';
 import * as pdfjsLib from 'pdfjs-dist';
-import type { PDFDocumentProxy, PDFPageProxy } from 'pdfjs-dist/types/src/display/api';
+import type { PDFDocumentProxy, PDFPageProxy, TextItem } from 'pdfjs-dist/types/src/display/api';
 import { Skeleton } from './ui/skeleton';
 
 type PdfViewerProps = {
@@ -70,7 +70,7 @@ const PageCanvas: React.FC<{
         const renderTask = page.render(renderContext);
         renderTask.promise.then(async () => {
             const textContent = await page.getTextContent();
-            textLayer.innerHTML = ''; // Clear previous text layer
+            // This is the correct way to call renderTextLayer
             pdfjsLib.renderTextLayer({
                 textContentSource: textContent,
                 container: textLayer,
