@@ -1,7 +1,7 @@
 
 'use client';
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import * as pdfjsLib from 'pdfjs-dist';
 import type { PDFDocumentProxy, TextItem as PdfTextItem } from 'pdfjs-dist/types/src/display/api';
 import { UploadCloud, FileText, Loader2, LogOut, Save, Library, Download, Bot, Lightbulb, HelpCircle, Cloud, CloudOff, Settings, Menu, Home, BarChart, BookOpenCheck, BrainCircuit, Mic, FastForward, Rewind, Wind, Maximize, Minimize, ZoomIn, ZoomOut, Trash2, XCircle } from 'lucide-react';
@@ -263,6 +263,7 @@ export default function ReadPage() {
         setZoomLevel(existingDoc.zoomLevel || 1);
          if (existingDoc.audioUrl && audioRef.current) {
             audioRef.current.src = existingDoc.audioUrl;
+            audioRef.current.load(); // Explicitly load the new audio
         }
       }
 
@@ -305,7 +306,7 @@ export default function ReadPage() {
     if (!audioRef.current) return;
     if (isSpeaking) {
       audioRef.current.pause();
-    } else if (audioRef.current.src && audioRef.current.src !== window.location.href) {
+    } else if (audioRef.current.src && audioRef.current.src !== window.location.href) { // Ensure src is valid
       try {
         await audioRef.current.play();
       } catch (error) {
@@ -325,7 +326,7 @@ export default function ReadPage() {
       }
 
       if (!documentText || !activeDoc || !activeDoc.id) {
-          toast({ variant: "destructive", title: "No Document", description: "Please load and save a document first." });
+          toast({ variant: "destructive", title: "No Document", description: "Please load a document first." });
           return;
       }
 
@@ -380,6 +381,7 @@ export default function ReadPage() {
         setActiveDoc(updatedDoc);
         if (audioRef.current) {
             audioRef.current.src = newAudioUrl;
+            audioRef.current.load();
         }
         await fetchUserDocuments(); // Refresh the list to show the cloud icon
 
@@ -600,6 +602,12 @@ export default function ReadPage() {
           default: return '';
       }
   }
+
+  // Memoize the prop for PdfViewer to prevent unnecessary re-renders
+  const pdfDocProp = useMemo(() => {
+    if (!activeDoc) return null;
+    return { url: activeDoc.pdfUrl };
+  }, [activeDoc]);
 
   const renderContent = () => {
     switch (pdfState) {
@@ -911,7 +919,7 @@ export default function ReadPage() {
               {pdfState !== 'loaded' && renderContent()}
               <div className={cn("w-full h-full relative", pdfState === 'loaded' ? 'flex items-center justify-center' : 'hidden')}>
                   <PdfViewer 
-                      pdfDoc={activeDoc ? {url: activeDoc.pdfUrl, numPages: 0} as any : null} 
+                      pdfDoc={pdfDocProp}
                       scale={zoomLevel} 
                   />
               </div>
@@ -971,3 +979,5 @@ export default function ReadPage() {
     </TooltipProvider>
   );
 }
+
+    
