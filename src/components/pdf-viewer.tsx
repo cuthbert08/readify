@@ -7,7 +7,7 @@ import type { PDFDocumentProxy, PDFPageProxy } from 'pdfjs-dist/types/src/displa
 import { Skeleton } from './ui/skeleton';
 
 type PdfViewerProps = {
-    pdfDoc: PDFDocumentProxy | null;
+    pdfDoc: { url: string } | null;
     scale: number;
 };
 
@@ -49,14 +49,20 @@ const PdfViewer: React.FC<PdfViewerProps> = React.memo(({ pdfDoc, scale }) => {
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
-        if (!pdfDoc) return;
+        if (!pdfDoc || !pdfDoc.url) {
+            setPages([]);
+            setLoading(false);
+            return;
+        }
 
         const fetchPages = async () => {
             setLoading(true);
-            const allPages: PDFPageProxy[] = [];
             try {
-                for (let i = 1; i <= pdfDoc.numPages; i++) {
-                    const page = await pdfDoc.getPage(i);
+                const loadingTask = pdfjsLib.getDocument(pdfDoc.url);
+                const doc = await loadingTask.promise;
+                const allPages: PDFPageProxy[] = [];
+                for (let i = 1; i <= doc.numPages; i++) {
+                    const page = await doc.getPage(i);
                     allPages.push(page);
                 }
                 setPages(allPages);
@@ -77,6 +83,10 @@ const PdfViewer: React.FC<PdfViewerProps> = React.memo(({ pdfDoc, scale }) => {
                 <Skeleton className="h-[842px] w-[595px] rounded-md mx-auto" />
             </div>
         );
+    }
+
+    if(pages.length === 0){
+        return null;
     }
 
     return (
