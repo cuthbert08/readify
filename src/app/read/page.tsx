@@ -386,7 +386,7 @@ export default function ReadPage() {
     }
   };
   
-    const handleGenerateAudio = async () => {
+  const handleGenerateAudio = async () => {
       // If we are already generating, this button becomes a cancel button
       if (isGeneratingSpeech) {
           if (generationAbortController.current) {
@@ -1050,7 +1050,7 @@ export default function ReadPage() {
                         processingStage={processingStage}
                         processingMessage={getProcessingMessage()}
                         onPlayPause={handlePlayPause}
-                        canPlay={!!(audioRef.current && audioRef.current.src)}
+                        canPlay={!!(audioRef.current && (audioRef.current.src || lastGeneratedAudioUrl.current))}
                         isFullScreen={isFullScreen}
                         onFullScreen={toggleFullScreen}
                         zoomLevel={zoomLevel}
