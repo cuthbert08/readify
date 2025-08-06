@@ -262,6 +262,9 @@ export default function ReadPage() {
       
       if(typeof source !== 'string') {
         setFileName(source.name);
+      } else {
+        const name = savedData?.fileName || source.split('/').pop() || 'Document';
+        setFileName(name);
       }
 
     } catch (error) {
@@ -294,7 +297,6 @@ export default function ReadPage() {
   };
   
   const handleSelectDocument = async (doc: Document) => {
-    setFileName(doc.fileName);
     setZoomLevel(doc.zoomLevel || 1);
     await loadPdf(doc.pdfUrl, doc.id, doc);
   }
@@ -378,11 +380,19 @@ export default function ReadPage() {
     if (isGeneratingSpeech) return;
 
     // If there's already a playable source in the audio element, just play it.
-    if (audioRef.current && audioRef.current.src && audioRef.current.readyState >= 2) {
+    if (audioRef.current && audioRef.current.src && audioRef.current.readyState >= 2) { // readyState >= 2 means metadata is loaded
         audioRef.current.play();
         setIsSpeaking(true);
         return;
     }
+    
+    // If the src is set but not ready, load and play
+    if(audioRef.current && audioRef.current.src) {
+        audioRef.current.play();
+        setIsSpeaking(true);
+        return;
+    }
+
 
     if (!documentText || !activeDoc) return;
 
@@ -1030,6 +1040,8 @@ export default function ReadPage() {
 
         <audio 
           ref={audioRef} 
+          onPlay={() => setIsSpeaking(true)}
+          onPause={() => setIsSpeaking(false)}
           onEnded={() => setIsSpeaking(false)} 
           onLoadedMetadata={(e) => setAudioDuration(e.currentTarget.duration)}
           onTimeUpdate={handleAudioTimeUpdate}
@@ -1052,3 +1064,5 @@ export default function ReadPage() {
     </TooltipProvider>
   );
 }
+
+    
