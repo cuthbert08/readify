@@ -4,7 +4,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import * as pdfjsLib from 'pdfjs-dist';
 import type { PDFDocumentProxy, TextItem as PdfTextItem } from 'pdfjs-dist/types/src/display/api';
-import { UploadCloud, FileText, Loader2, LogOut, Save, Library, Download, Bot, Lightbulb, HelpCircle, Cloud, CloudOff, Settings, Menu, Home, BarChart, BookOpenCheck, BrainCircuit, Mic, FastForward, Rewind, Wind, Maximize, Minimize, ZoomIn, ZoomOut, Trash2 } from 'lucide-react';
+import { UploadCloud, FileText, Loader2, LogOut, Save, Library, Download, Bot, Lightbulb, HelpCircle, Cloud, CloudOff, Settings, Menu, Home, BarChart, BookOpenCheck, BrainCircuit, Mic, FastForward, Rewind, Wind, Maximize, Minimize, ZoomIn, ZoomOut, Trash2, XCircle } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import PdfViewer from '@/components/pdf-viewer';
 import AudioPlayer from '@/components/audio-player';
@@ -128,6 +128,7 @@ export default function ReadPage() {
   const router = useRouter();
 
   const isGeneratingSpeech = processingStage === 'cleaning' || processingStage === 'generating';
+  const generationAbortController = useRef<AbortController | null>(null);
 
   useEffect(() => {
     async function checkSession() {
@@ -371,99 +372,111 @@ export default function ReadPage() {
   };
 
   const handlePlayPause = async () => {
+    if (!audioRef.current) return;
+
     if (isSpeaking) {
-      audioRef.current?.pause();
-      setIsSpeaking(false);
-      return;
+      audioRef.current.pause();
+    } else if (audioRef.current.src) {
+      try {
+        await audioRef.current.play();
+      } catch (error) {
+        console.error("Error playing audio:", error);
+        toast({ variant: "destructive", title: "Playback Error", description: "Could not play the audio file."});
+      }
     }
-
-    if (isGeneratingSpeech) return;
-
-    // If there's already a playable source in the audio element, just play it.
-    if (audioRef.current && audioRef.current.src && audioRef.current.readyState >= 2) { // readyState >= 2 means metadata is loaded
-        audioRef.current.play();
-        setIsSpeaking(true);
-        return;
-    }
-    
-    // If the src is set but not ready, load and play
-    if(audioRef.current && audioRef.current.src) {
-        audioRef.current.play();
-        setIsSpeaking(true);
-        return;
-    }
-
-
-    if (!documentText || !activeDoc) return;
-
-    try {
-      setProcessingStage('cleaning');
-      const { cleanedText } = await cleanPdfText({ rawText: documentText });
-
-      if (!cleanedText || !cleanedText.trim()) {
-          toast({ 
-              variant: "destructive", 
-              title: "Content Error", 
-              description: "No readable content found in the document to generate audio." 
-          });
-          setProcessingStage('idle');
+  };
+  
+    const handleGenerateAudio = async () => {
+      // If we are already generating, this button becomes a cancel button
+      if (isGeneratingSpeech) {
+          if (generationAbortController.current) {
+              generationAbortController.current.abort();
+              toast({ title: "Cancelled", description: "Audio generation has been cancelled." });
+          }
           return;
       }
-      
-      setProcessingStage('generating');
-      
-      const response = await fetch('/api/generate-speech', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-              text: cleanedText,
-              voice: selectedVoice,
-              speakingRate: speakingRate,
-          }),
-      });
 
-      if (!response.ok) {
-          const errorData = await response.json();
-          throw new Error(errorData.error || 'API call failed');
+      if (!documentText || !activeDoc) {
+          toast({ variant: "destructive", title: "No Document", description: "Please load a document first." });
+          return;
       }
 
-      const result = await response.json(); // Expects { audioDataUris: [...] }
+      generationAbortController.current = new AbortController();
+      const signal = generationAbortController.current.signal;
 
-      if (!result.audioDataUris || result.audioDataUris.length === 0) {
-          throw new Error('Audio generation failed to return data.');
+      try {
+        setProcessingStage('cleaning');
+        const { cleanedText } = await cleanPdfText({ rawText: documentText });
+
+        if (signal.aborted) throw new DOMException('Aborted', 'AbortError');
+
+        if (!cleanedText || !cleanedText.trim()) {
+            toast({ 
+                variant: "destructive", 
+                title: "Content Error", 
+                description: "No readable content found in the document to generate audio." 
+            });
+            setProcessingStage('idle');
+            return;
+        }
+        
+        setProcessingStage('generating');
+        
+        const response = await fetch('/api/generate-speech', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                text: cleanedText,
+                voice: selectedVoice,
+                speakingRate: speakingRate,
+            }),
+            signal: signal,
+        });
+        
+        if (signal.aborted) throw new DOMException('Aborted', 'AbortError');
+
+        if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.error || 'API call failed');
+        }
+
+        const result = await response.json();
+
+        if (!result.audioDataUris || result.audioDataUris.length === 0) {
+            throw new Error('Audio generation failed to return data.');
+        }
+        
+        const mergedAudioBlob = await mergeAudio(result.audioDataUris);
+        const audioUrl = URL.createObjectURL(mergedAudioBlob);
+
+        if (lastGeneratedAudioUrl.current) {
+          URL.revokeObjectURL(lastGeneratedAudioUrl.current);
+        }
+        lastGeneratedAudioUrl.current = audioUrl;
+
+        if (audioRef.current) {
+          audioRef.current.src = audioUrl;
+        }
+        
+        setActiveDoc(prev => prev ? { ...prev, generatedAudioBlob: mergedAudioBlob } : null);
+        
+        setProcessingStage('idle');
+        
+        // Auto-save after successful generation
+        await handleSaveDocument();
+
+      } catch (error: any) {
+        if (error.name === 'AbortError') {
+          console.log("Audio generation was aborted.");
+        } else {
+          console.error('Speech generation error', error);
+          const errorMessage = error instanceof Error ? error.message : "An unknown error occurred";
+          toast({ variant: "destructive", title: "Audio Error", description: `Could not generate audio. ${errorMessage}` });
+        }
+        setProcessingStage('idle');
+      } finally {
+        generationAbortController.current = null;
       }
-      
-      // Merge audio on the client-side
-      const mergedAudioBlob = await mergeAudio(result.audioDataUris);
-      const audioUrl = URL.createObjectURL(mergedAudioBlob);
-
-      // Clean up previous blob URL if it exists
-      if (lastGeneratedAudioUrl.current) {
-        URL.revokeObjectURL(lastGeneratedAudioUrl.current);
-      }
-      lastGeneratedAudioUrl.current = audioUrl;
-
-
-      if (audioRef.current) {
-        audioRef.current.src = audioUrl;
-        audioRef.current.play();
-        setIsSpeaking(true);
-      }
-
-      // Hold the new audio blob in state, then trigger save
-      setActiveDoc(prev => prev ? { ...prev, generatedAudioBlob: mergedAudioBlob } : null);
-      await handleSaveDocument();
-      
-      setProcessingStage('idle');
-
-    } catch (error) {
-      console.error('Speech generation error', error);
-      setProcessingStage('error');
-      setIsSpeaking(false);
-      const errorMessage = error instanceof Error ? error.message : "An unknown error occurred";
-      toast({ variant: "destructive", title: "Audio Error", description: `Could not generate audio for the document. ${errorMessage}` });
-      setTimeout(() => setProcessingStage('idle'), 2000);
-    }
   };
   
   const handleDeleteDocument = async (docId: string | null) => {
@@ -913,16 +926,28 @@ export default function ReadPage() {
                                   </TooltipTrigger>
                                   <TooltipContent><p>{fileName}</p></TooltipContent>
                               </Tooltip>
-                              <Tooltip>
-                                  <TooltipTrigger asChild>
-                                      <Button variant="ghost" size="icon" className="h-7 w-7" onClick={handleSaveDocument} disabled={isSaving || isGeneratingSpeech}>
-                                          {isSaving || isGeneratingSpeech ? <Loader2 className="h-4 w-4 animate-spin"/> : <CloudOff className="h-4 w-4 text-destructive" />}
-                                      </Button>
-                                  </TooltipTrigger>
-                                  <TooltipContent>
-                                      <p>Not saved. Generate audio or click to save.</p>
-                                  </TooltipContent>
-                              </Tooltip>
+                                <div className="flex items-center">
+                                  <Tooltip>
+                                      <TooltipTrigger asChild>
+                                          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={handleSaveDocument} disabled={isSaving || isGeneratingSpeech}>
+                                              {isSaving ? <Loader2 className="h-4 w-4 animate-spin"/> : <CloudOff className="h-4 w-4 text-destructive" />}
+                                          </Button>
+                                      </TooltipTrigger>
+                                      <TooltipContent>
+                                          <p>Not saved. Generate audio or click to save.</p>
+                                      </TooltipContent>
+                                  </Tooltip>
+                                  <Tooltip>
+                                      <TooltipTrigger asChild>
+                                          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={handleGenerateAudio} disabled={!activeDoc}>
+                                              {isGeneratingSpeech ? <Loader2 className="h-4 w-4 animate-spin" /> : <Mic className="h-4 w-4" />}
+                                          </Button>
+                                      </TooltipTrigger>
+                                      <TooltipContent>
+                                          <p>Generate Audio</p>
+                                      </TooltipContent>
+                                  </Tooltip>
+                                </div>
                           </div>
                           </div>
                           )}
@@ -941,18 +966,27 @@ export default function ReadPage() {
                                   </TooltipTrigger>
                                   <TooltipContent><p>{doc.fileName}</p></TooltipContent>
                                   </Tooltip>
-                                  <div className="flex items-center">
-                                      <Tooltip>
-                                      <TooltipTrigger asChild>
-                                          <Cloud className="h-4 w-4 text-primary" />
-                                      </TooltipTrigger>
-                                      <TooltipContent>
-                                          <p>Saved to cloud</p>
-                                      </TooltipContent>
-                                      </Tooltip>
+                                  <div className="flex items-center opacity-0 group-hover:opacity-100 transition-opacity">
+                                      {doc.audioUrl ? (
+                                        <Tooltip>
+                                          <TooltipTrigger asChild>
+                                             <Cloud className="h-4 w-4 text-primary mr-2" />
+                                          </TooltipTrigger>
+                                          <TooltipContent><p>Audio is saved</p></TooltipContent>
+                                        </Tooltip>
+                                      ) : (
+                                        <Tooltip>
+                                          <TooltipTrigger asChild>
+                                             <Button variant="ghost" size="icon" className="h-7 w-7" onClick={handleGenerateAudio} disabled={isGeneratingSpeech && activeDoc?.id !== doc.id}>
+                                                 {isGeneratingSpeech && activeDoc?.id === doc.id ? <XCircle className="h-4 w-4 text-destructive" /> : <Mic className="h-4 w-4" />}
+                                             </Button>
+                                          </TooltipTrigger>
+                                          <TooltipContent><p>{isGeneratingSpeech && activeDoc?.id === doc.id ? 'Cancel Generation' : 'Generate Audio'}</p></TooltipContent>
+                                        </Tooltip>
+                                      )}
                                       <Tooltip>
                                           <TooltipTrigger asChild>
-                                              <Button variant="ghost" size="icon" className="h-7 w-7 opacity-0 group-hover:opacity-100" onClick={() => handleDeleteDocument(doc.id)}>
+                                              <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleDeleteDocument(doc.id)}>
                                                   <Trash2 className="h-4 w-4 text-destructive" />
                                               </Button>
                                           </TooltipTrigger>
@@ -1016,7 +1050,7 @@ export default function ReadPage() {
                         processingStage={processingStage}
                         processingMessage={getProcessingMessage()}
                         onPlayPause={handlePlayPause}
-                        canPlay={!!documentText}
+                        canPlay={!!(audioRef.current && audioRef.current.src)}
                         isFullScreen={isFullScreen}
                         onFullScreen={toggleFullScreen}
                         zoomLevel={zoomLevel}
@@ -1064,5 +1098,3 @@ export default function ReadPage() {
     </TooltipProvider>
   );
 }
-
-    
