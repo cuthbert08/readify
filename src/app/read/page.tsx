@@ -304,78 +304,79 @@ export default function ReadPage() {
 
   const handleSaveDocument = async () => {
     if (!activeDoc || (!activeDoc.file && !activeDoc.id)) {
-      toast({ variant: "destructive", title: "Save Error", description: "No document data to save." });
-      return;
+        toast({ variant: "destructive", title: "Save Error", description: "No document data to save." });
+        return;
     }
 
     setIsSaving(true);
     try {
-      let pdfUrl = activeDoc.url;
-      let audioUrl = activeDoc.audioUrl;
-      let docToSave: Partial<Document> = {
-          id: activeDoc.id,
-          fileName: fileName,
-          zoomLevel: zoomLevel,
-      };
+        let pdfUrl = activeDoc.url;
+        let audioUrl = activeDoc.audioUrl;
 
-      // Scenario 1: Uploading a new PDF file (which might also have generated audio)
-      if (activeDoc.file) {
-          const uploadPdfResponse = await fetch('/api/upload', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/pdf', 'x-vercel-filename': activeDoc.file.name },
-              body: activeDoc.file,
-          });
-          if (!uploadPdfResponse.ok) throw new Error('PDF Upload failed');
-          const pdfBlob = await uploadPdfResponse.json();
-          pdfUrl = pdfBlob.url;
-      }
+        // Step 1: Upload PDF if it's a new file
+        if (activeDoc.file) {
+            const uploadPdfResponse = await fetch('/api/upload', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/pdf', 'x-vercel-filename': activeDoc.file.name },
+                body: activeDoc.file,
+            });
+            if (!uploadPdfResponse.ok) throw new Error('PDF Upload failed');
+            const pdfBlob = await uploadPdfResponse.json();
+            pdfUrl = pdfBlob.url;
+        }
+        
+        if (!pdfUrl) {
+            throw new Error("Could not determine PDF URL for saving.");
+        }
 
-      if (!pdfUrl) {
-        throw new Error("Could not determine PDF URL for saving.");
-      }
-      docToSave.pdfUrl = pdfUrl;
+        // Step 2: Upload generated audio if it exists
+        if (activeDoc.generatedAudioBlob) {
+            const audioFileName = `${fileName.replace(/\.pdf$/i, '') || 'audio'}.mp3`;
+            const uploadAudioResponse = await fetch('/api/upload', {
+                method: 'POST',
+                headers: { 'Content-Type': 'audio/mp3', 'x-vercel-filename': audioFileName },
+                body: activeDoc.generatedAudioBlob,
+            });
+            if (!uploadAudioResponse.ok) throw new Error('Audio Upload failed');
+            const audioBlobResult = await uploadAudioResponse.json();
+            audioUrl = audioBlobResult.url;
+        }
 
-      // Scenario 2: Uploading newly generated audio (for either a new or existing PDF)
-      if (activeDoc.generatedAudioBlob) {
-          const audioFileName = `${fileName.replace(/\.pdf$/i, '') || 'audio'}.mp3`;
-          const uploadAudioResponse = await fetch('/api/upload', {
-              method: 'POST',
-              headers: { 'Content-Type': 'audio/mp3', 'x-vercel-filename': audioFileName },
-              body: activeDoc.generatedAudioBlob,
-          });
-          if (!uploadAudioResponse.ok) throw new Error('Audio Upload failed');
-          const audioBlobResult = await uploadAudioResponse.json();
-          audioUrl = audioBlobResult.url;
-      }
-      docToSave.audioUrl = audioUrl;
+        // Step 3: Save all data to the database
+        const docToSave: Partial<Document> = {
+            id: activeDoc.id,
+            fileName: fileName,
+            pdfUrl: pdfUrl,
+            audioUrl: audioUrl,
+            zoomLevel: zoomLevel,
+        };
 
-      // Save all collected data to the database
-      const savedDoc = await saveDocument(docToSave as Document);
+        const savedDoc = await saveDocument(docToSave as Document);
 
-      // Update activeDoc state to reflect saved status
-      setActiveDoc(prev => prev ? { 
-          ...prev, 
-          id: savedDoc.id, 
-          file: null, // Clear the file after saving
-          url: savedDoc.pdfUrl, 
-          audioUrl: savedDoc.audioUrl, 
-          generatedAudioBlob: null // Clear the blob after saving
-      } : null);
-    
-      await fetchUserDocuments(); 
+        // Step 4: Update local state to reflect saved status
+        setActiveDoc(prev => prev ? {
+            ...prev,
+            id: savedDoc.id,
+            file: null, // Clear the file after saving
+            url: savedDoc.pdfUrl,
+            audioUrl: savedDoc.audioUrl,
+            generatedAudioBlob: null // Clear the blob after saving
+        } : null);
 
-      toast({ title: "Success", description: "Document and audio saved successfully." });
+        await fetchUserDocuments();
+
+        toast({ title: "Success", description: "Document saved successfully." });
     } catch (error) {
-      console.error('Save error:', error);
-      toast({ 
-        variant: "destructive", 
-        title: "Save Error", 
-        description: error instanceof Error ? error.message : "Could not save your document." 
-      });
+        console.error('Save error:', error);
+        toast({
+            variant: "destructive",
+            title: "Save Error",
+            description: error instanceof Error ? error.message : "Could not save your document."
+        });
     } finally {
-      setIsSaving(false);
+        setIsSaving(false);
     }
-  };
+};
 
   const handlePlayPause = async () => {
     if (!audioRef.current) return;
@@ -464,12 +465,19 @@ export default function ReadPage() {
           audioRef.current.src = audioUrl;
         }
         
-        setActiveDoc(prev => prev ? { ...prev, generatedAudioBlob: mergedAudioBlob } : null);
+        setActiveDoc(prev => {
+            if (!prev) return null;
+            const updatedDoc = { ...prev, generatedAudioBlob: mergedAudioBlob };
+            
+            // Trigger auto-save immediately after generation by calling the save handler
+            // Need to wrap this in a way that doesn't cause a re-render loop
+            // or state update issues.
+            setTimeout(() => handleSaveDocument(), 0);
+
+            return updatedDoc;
+        });
         
         setProcessingStage('idle');
-        
-        // Auto-save after successful generation
-        await handleSaveDocument();
 
       } catch (error: any) {
         if (error.name === 'AbortError') {
