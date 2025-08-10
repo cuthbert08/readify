@@ -6,7 +6,6 @@ import * as pdfjsLib from 'pdfjs-dist';
 import type { PDFDocumentProxy, TextItem as PdfTextItem } from 'pdfjs-dist/types/src/display/api';
 import { UploadCloud, FileText, Loader2, LogOut, Save, Library, Download, Bot, Lightbulb, HelpCircle, Cloud, CloudOff, Settings, Menu, Home, BarChart, BookOpenCheck, BrainCircuit, Mic, FastForward, Rewind, Wind, Maximize, Minimize, ZoomIn, ZoomOut, Trash2, XCircle, MessageSquare } from 'lucide-react';
 import { useRouter } from 'next/navigation';
-import { randomUUID } from 'crypto';
 import PdfViewer from '@/components/pdf-viewer';
 import AudioPlayer from '@/components/audio-player';
 import { useToast } from "@/hooks/use-toast";
@@ -20,7 +19,7 @@ import { generateGlossary, GenerateGlossaryOutput, GlossaryItem } from '@/ai/flo
 import { generateQuiz, type GenerateQuizOutput } from '@/ai/flows/quiz-flow';
 import { cleanPdfText } from '@/ai/flows/clean-text-flow';
 import { Sidebar, SidebarHeader, SidebarMenu, SidebarMenuItem, SidebarMenuButton, SidebarFooter, SidebarContent } from '@/components/ui/sidebar';
-import { getDocuments, saveDocument, Document, getUserSession, ChatMessage } from '@/lib/db';
+import { getDocuments, saveDocument, Document, getUserSession, ChatMessage, deleteDocument } from '@/lib/db';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import AiDialog, { AiDialogType } from '@/components/ai-dialog';
 import { Separator } from '@/components/ui/separator';
@@ -620,7 +619,7 @@ export default function ReadPage() {
       if(!activeDoc || !activeDoc.id || !documentText) return;
 
       const userMessage: ChatMessage = {
-          id: randomUUID(),
+          id: crypto.randomUUID(),
           role: 'user',
           content: message,
           createdAt: new Date().toISOString(),
@@ -638,7 +637,7 @@ export default function ReadPage() {
           });
 
           const assistantMessage: ChatMessage = {
-              id: randomUUID(),
+              id: crypto.randomUUID(),
               role: 'assistant',
               content: result.answer,
               createdAt: new Date().toISOString(),
