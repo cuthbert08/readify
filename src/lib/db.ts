@@ -182,3 +182,30 @@ export async function deleteDocument(docId: string): Promise<{ success: boolean,
         return { success: false, message };
     }
 }
+
+export async function clearChatHistory(docId: string): Promise<Document> {
+    const session = await getSession();
+    if (!session?.userId) {
+        throw new Error('Authentication required.');
+    }
+
+    const docKey = `readify:doc:${docId}`;
+    const doc: Document | null = await kv.get(docKey);
+
+    if (!doc) {
+        throw new Error('Document not found.');
+    }
+
+    if (doc.userId !== session.userId && !session.isAdmin) {
+        throw new Error('You do not have permission to modify this document.');
+    }
+
+    const updatedDoc: Document = {
+        ...doc,
+        chatHistory: [],
+    };
+
+    await kv.set(docKey, updatedDoc);
+
+    return updatedDoc;
+}

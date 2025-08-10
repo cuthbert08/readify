@@ -1,11 +1,11 @@
 
 'use client';
 
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, forwardRef } from 'react';
 import { Card, CardHeader, CardTitle, CardContent, CardFooter } from './ui/card';
 import { Button } from './ui/button';
 import { ScrollArea } from './ui/scroll-area';
-import { Loader2, Minus, Send, X, Volume2 } from 'lucide-react';
+import { Loader2, Minus, Send, X, Volume2, Trash2 } from 'lucide-react';
 import { type ChatMessage } from '@/lib/db';
 import ReactMarkdown from 'react-markdown';
 import { DraggableCore } from 'react-draggable';
@@ -17,11 +17,12 @@ type ChatWindowProps = {
   onSendMessage: (message: string) => void;
   onClose: () => void;
   onPlayAudio: (text: string) => void;
+  onClearChat: () => void;
 };
 
 // Use forwardRef to get a ref to the underlying DOM element for react-draggable
-export const ChatWindow = React.forwardRef<HTMLDivElement, ChatWindowProps>(
-    ({ chatHistory, isLoading, onSendMessage, onClose, onPlayAudio }, ref) => {
+export const ChatWindow = forwardRef<HTMLDivElement, ChatWindowProps>(
+    ({ chatHistory, isLoading, onSendMessage, onClose, onPlayAudio, onClearChat }, ref) => {
   const [message, setMessage] = useState('');
   const [isMinimized, setIsMinimized] = useState(false);
   const scrollAreaRef = useRef<HTMLDivElement>(null);
@@ -50,6 +51,12 @@ export const ChatWindow = React.forwardRef<HTMLDivElement, ChatWindowProps>(
     }
   };
 
+  const handleClearChat = () => {
+      if(window.confirm("Are you sure you want to permanently delete this chat history?")) {
+          onClearChat();
+      }
+  }
+
   if (isMinimized) {
     return (
       <div className="fixed bottom-4 right-4 z-50">
@@ -63,6 +70,7 @@ export const ChatWindow = React.forwardRef<HTMLDivElement, ChatWindowProps>(
     <div ref={ref}>
         <DraggableCore 
             handle=".handle"
+            nodeRef={ref as React.RefObject<HTMLDivElement>}
         >
           <div
             className="fixed bottom-4 right-4 z-50"
@@ -71,6 +79,7 @@ export const ChatWindow = React.forwardRef<HTMLDivElement, ChatWindowProps>(
               <CardHeader className="handle cursor-move flex flex-row items-center justify-between p-4">
                 <CardTitle>Chat with Document</CardTitle>
                 <div className="flex items-center gap-1">
+                    <Button variant="ghost" size="icon" className="h-7 w-7" onClick={handleClearChat}><Trash2 /></Button>
                     <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setIsMinimized(true)}><Minus /></Button>
                     <Button variant="ghost" size="icon" className="h-7 w-7" onClick={onClose}><X /></Button>
                 </div>

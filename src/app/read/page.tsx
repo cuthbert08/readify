@@ -19,7 +19,7 @@ import { generateGlossary, GenerateGlossaryOutput, GlossaryItem } from '@/ai/flo
 import { generateQuiz, type GenerateQuizOutput } from '@/ai/flows/quiz-flow';
 import { cleanPdfText } from '@/ai/flows/clean-text-flow';
 import { Sidebar, SidebarHeader, SidebarMenu, SidebarMenuItem, SidebarMenuButton, SidebarFooter, SidebarContent } from '@/components/ui/sidebar';
-import { getDocuments, saveDocument, Document, getUserSession, ChatMessage, deleteDocument } from '@/lib/db';
+import { getDocuments, saveDocument, Document, getUserSession, ChatMessage, deleteDocument, clearChatHistory } from '@/lib/db';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import AiDialog, { AiDialogType } from '@/components/ai-dialog';
 import { Separator } from '@/components/ui/separator';
@@ -657,6 +657,19 @@ export default function ReadPage() {
       }
   }
 
+  const handleClearChat = async () => {
+    if (!activeDoc || !activeDoc.id) return;
+    
+    try {
+        const updatedDoc = await clearChatHistory(activeDoc.id);
+        setActiveDoc(updatedDoc);
+        toast({ title: "Success", description: "Chat history has been cleared." });
+    } catch (error) {
+        const message = error instanceof Error ? error.message : "Could not clear chat history.";
+        toast({ variant: "destructive", title: "Error", description: message });
+    }
+  }
+
   const toggleFullScreen = () => {
     const element = document.documentElement; 
     if (!element) return;
@@ -1060,6 +1073,7 @@ export default function ReadPage() {
                 onSendMessage={handleSendMessage}
                 onClose={() => setIsChatOpen(false)}
                 onPlayAudio={handlePlayAiResponse}
+                onClearChat={handleClearChat}
             />
         )}
 
