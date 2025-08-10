@@ -4,7 +4,7 @@
 import { Resend } from 'resend';
 import { WelcomeEmail } from '@/components/emails/welcome-email';
 
-const resend = new Resend(process.env.resend_api_key);
+const resend = new Resend(process.env.RESEND_API_KEY);
 const fromEmail = process.env.FROM_EMAIL || 'onboarding@resend.dev';
 
 export async function sendWelcomeEmail(
@@ -22,12 +22,15 @@ export async function sendWelcomeEmail(
 
     if (error) {
       console.error('Resend Error:', error);
-      throw new Error('Failed to send welcome email.');
+      // Throw a more specific error to be caught by the calling action
+      throw new Error(`Resend failed: ${error.message}`);
     }
 
     console.log('Welcome email sent successfully:', data?.id);
     return data;
   } catch (error) {
+    // Catch the error and re-throw it to ensure the calling function knows about it.
+    // This now includes our more specific error from above.
     console.error('Error in sendWelcomeEmail:', error);
     throw error;
   }
