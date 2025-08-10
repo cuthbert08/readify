@@ -22,8 +22,8 @@ type ChatWindowProps = {
 export function ChatWindow({ chatHistory, isLoading, onSendMessage, onClose, onPlayAudio }: ChatWindowProps) {
   const [message, setMessage] = useState('');
   const [isMinimized, setIsMinimized] = useState(false);
-  const [position, setPosition] = useState({ x: 0, y: 0 });
   const scrollAreaRef = useRef<HTMLDivElement>(null);
+  const nodeRef = React.useRef(null);
 
   useEffect(() => {
     if (scrollAreaRef.current) {
@@ -53,11 +53,11 @@ export function ChatWindow({ chatHistory, isLoading, onSendMessage, onClose, onP
   return (
     <DraggableCore 
         handle=".handle"
-        onDrag={(e, data) => setPosition(prev => ({ x: prev.x + data.deltaX, y: prev.y + data.deltaY }))}
+        nodeRef={nodeRef}
     >
       <div
+        ref={nodeRef}
         className="fixed bottom-4 right-4 z-50"
-        style={{ transform: `translate(${position.x}px, ${position.y}px)` }}
       >
         <Card className="w-[450px] h-[600px] flex flex-col shadow-2xl">
           <CardHeader className="handle cursor-move flex flex-row items-center justify-between p-4">
