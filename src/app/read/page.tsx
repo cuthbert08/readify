@@ -122,6 +122,7 @@ export default function ReadPage() {
   const controlsTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const localAudioUrlRef = useRef<string | null>(null); 
   const router = useRouter();
+  const chatWindowRef = useRef<HTMLDivElement>(null);
 
 
   useEffect(() => {
@@ -1052,6 +1053,8 @@ export default function ReadPage() {
         
         {isChatOpen && activeDoc && (
             <ChatWindow 
+                ref={chatWindowRef}
+                key={activeDoc.id}
                 chatHistory={activeDoc.chatHistory || []}
                 isLoading={isChatLoading}
                 onSendMessage={handleSendMessage}
