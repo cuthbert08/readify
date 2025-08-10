@@ -5,8 +5,8 @@ import { kv } from '@vercel/kv';
 import { getSession } from './session';
 import type { User as DbUser } from './db';
 import { randomUUID } from 'crypto';
-import bcrypt from 'bcrypt';
 import { deleteDocument as dbDeleteDocument } from './db';
+import { sendWelcomeEmail } from './email';
 
 export interface Document {
   id: string;
@@ -134,51 +134,52 @@ export async function deleteUser(userId: string): Promise<{ success: boolean; me
 }
 
 export async function createUser(userData: {
-    name: string;
-    email: string;
-    username: string;
-    password: string;
-    role: 'Admin' | 'User';
+    name: string;
+    email: string;
+    role: 'Admin' | 'User';
 }): Promise<{ success: boolean, message?: string }> {
-    await checkAdmin();
+    await checkAdmin();
 
-    try {
-        const { name, email, username, password, role } = userData;
+    try {
+        const { name, email, role } = userData;
 
-        const existingUserByEmail: User | null = await kv.get(`readify:user:email:${email}`);
-        if (existingUserByEmail) {
-            return { success: false, message: 'User with this email already exists.' };
-        }
-        const existingUserByUsername: User | null = await kv.get(`readify:user:username:${username}`);
-        if (existingUserByUsername) {
-            return { success: false, message: 'User with this username already exists.'};
+        const existingUserByEmail: User | null = await kv.get(`readify:user:email:${email}`);
+        if (existingUserByEmail) {
+            return { success: false, message: 'User with this email already exists.' };
         }
+        
+        const setupToken = randomUUID();
+        const setupTokenExpiry = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
 
-        const hashedPassword = await bcrypt.hash(password, 10);
-        const userId = randomUUID();
-        const newUser: User = {
-            id: userId,
-            name,
-            email,
-            username,
-            password: hashedPassword,
-            isAdmin: role === 'Admin',
-            createdAt: new Date().toISOString(),
-        };
+        const userId = randomUUID();
+        const newUser: User = {
+            id: userId,
+            name,
+            email,
+            username: null,
+            password: '', // Password will be set by the user
+            isAdmin: role === 'Admin',
+            createdAt: new Date().toISOString(),
+            setupToken,
+            setupTokenExpiry: setupTokenExpiry.toISOString(),
+        };
 
-        const pipeline = kv.pipeline();
-        pipeline.set(`readify:user:email:${email}`, newUser);
-        pipeline.set(`readify:user:username:${username}`, newUser);
-        pipeline.set(`readify:user:id:${userId}`, newUser);
-        await pipeline.exec();
+        const pipeline = kv.pipeline();
+        pipeline.set(`readify:user:email:${email}`, newUser);
+        pipeline.set(`readify:user:id:${userId}`, newUser);
+        await pipeline.exec();
+        
+        const setupLink = `${process.env.NEXT_PUBLIC_APP_URL}/setup-account/${setupToken}`;
+        await sendWelcomeEmail(email, name, setupLink);
 
-        return { success: true };
-    } catch (error) {
-        const message = error instanceof Error ? error.message : 'An unknown error occurred';
-        console.error('Failed to create user:', message);
-        return { success: false, message };
-    }
+        return { success: true };
+    } catch (error) {
+        const message = error instanceof Error ? error.message : 'An unknown error occurred';
+        console.error('Failed to create user:', message);
+        return { success: false, message };
+    }
 }
+
 
 export async function deleteDocumentAsAdmin(docId: string): Promise<{ success: boolean; message?: string }> {
     await checkAdmin();

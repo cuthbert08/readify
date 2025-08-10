@@ -40,7 +40,9 @@ export interface User {
     username: string | null; // Can be null for users who haven't set it yet
     password: string; // This is the hashed password
     isAdmin: boolean;
-    createdAt: string; 
+    createdAt: string;
+    setupToken: string | null;
+    setupTokenExpiry: string | null;
 }
 
 export interface UserSession extends SessionPayload {

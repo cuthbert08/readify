@@ -32,11 +32,6 @@ import { Loader2 } from 'lucide-react';
 const formSchema = z.object({
   name: z.string().min(2, 'Name must be at least 2 characters.'),
   email: z.string().email('Invalid email address.'),
-  username: z.string()
-    .min(3, 'Username must be at least 3 characters.')
-    .max(20, 'Username cannot be longer than 20 characters.')
-    .regex(/^[a-z0-9_.]+$/, 'Username can only contain lowercase letters, numbers, underscores, and periods.'),
-  password: z.string().min(8, 'Password must be at least 8 characters.'),
   role: z.enum(['User', 'Admin']),
 });
 
@@ -56,8 +51,6 @@ export default function AddUserDialog({ isOpen, onClose, onUserAdded }: AddUserD
     defaultValues: {
       name: '',
       email: '',
-      username: '',
-      password: '',
       role: 'User',
     },
   });
@@ -69,7 +62,7 @@ export default function AddUserDialog({ isOpen, onClose, onUserAdded }: AddUserD
       if (result.success) {
         toast({
           title: 'Success',
-          description: 'New user created successfully.',
+          description: 'Invitation email sent to the new user.',
         });
         onUserAdded();
         form.reset();
@@ -93,7 +86,7 @@ export default function AddUserDialog({ isOpen, onClose, onUserAdded }: AddUserD
         <DialogHeader>
           <DialogTitle>Add New User</DialogTitle>
           <DialogDescription>
-            Create a new user and assign them a role. They can change their password later.
+            An invitation will be sent to the user's email to set up their account.
           </DialogDescription>
         </DialogHeader>
         <Form {...form}>
@@ -119,32 +112,6 @@ export default function AddUserDialog({ isOpen, onClose, onUserAdded }: AddUserD
                   <FormLabel>Email</FormLabel>
                   <FormControl>
                     <Input placeholder="user@example.com" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={form.control}
-              name="username"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Username</FormLabel>
-                  <FormControl>
-                    <Input placeholder="john.doe" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={form.control}
-              name="password"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Temporary Password</FormLabel>
-                  <FormControl>
-                    <Input type="password" {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -186,7 +153,7 @@ export default function AddUserDialog({ isOpen, onClose, onUserAdded }: AddUserD
               </Button>
               <Button type="submit" disabled={isLoading}>
                 {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                Create User
+                Send Invitation
               </Button>
             </DialogFooter>
           </form>
