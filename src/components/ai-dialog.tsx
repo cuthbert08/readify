@@ -8,25 +8,23 @@ import {
   DialogHeader,
   DialogTitle,
   DialogDescription,
-  DialogFooter,
 } from '@/components/ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Loader2, Send } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
 import type { SummarizePdfOutput } from '@/ai/flows/summarize-pdf';
-import type { ChatWithPdfOutput } from '@/ai/flows/chat-with-pdf';
 import type { GenerateGlossaryOutput } from '@/ai/flows/glossary-flow';
-import type { GenerateQuizOutput } from '@/ai/schemas/quiz';
-import type { QuizQuestion } from '@/ai/schemas/quiz';
+import type { GenerateQuizOutput, QuizQuestion } from '@/ai/schemas/quiz';
 import { ScrollArea } from './ui/scroll-area';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from './ui/accordion';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { RadioGroup, RadioGroupItem } from './ui/radio-group';
 import { Label } from './ui/label';
 import { cn } from '@/lib/utils';
+import ReactMarkdown from 'react-markdown';
+import { QuizAttempt } from '@/lib/db';
 
-export type AiDialogType = 'summary' | 'key-points' | 'chat' | 'glossary' | 'quiz';
+export type AiDialogType = 'summary' | 'key-points' | 'glossary' | 'quiz';
 
 type AiDialogProps = {
   open: boolean;
@@ -34,11 +32,10 @@ type AiDialogProps = {
   type: AiDialogType;
   isLoading: boolean;
   summaryOutput: SummarizePdfOutput | null;
-  chatOutput: ChatWithPdfOutput | null;
   glossaryOutput: GenerateGlossaryOutput | null;
-  explanationOutput: { explanation: string } | null;
   quizOutput: GenerateQuizOutput | null;
-  onChatSubmit: (question: string) => void;
+  quizAttempt: QuizAttempt | null;
+  onQuizSubmit: (questions: QuizQuestion[], answers: Record<number, string>) => void;
 };
 
 const AiDialog: React.FC<AiDialogProps> = ({
@@ -47,21 +44,11 @@ const AiDialog: React.FC<AiDialogProps> = ({
   type,
   isLoading,
   summaryOutput,
-  chatOutput,
   glossaryOutput,
-  explanationOutput,
   quizOutput,
-  onChatSubmit,
+  quizAttempt,
+  onQuizSubmit,
 }) => {
-  const [question, setQuestion] = useState('');
-
-  const handleChatSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (question.trim()) {
-      onChatSubmit(question);
-      setQuestion('');
-    }
-  };
 
   const renderLoading = (text: string) => (
     <div className="flex items-center justify-center space-x-2 h-full p-8">
@@ -129,28 +116,30 @@ const AiDialog: React.FC<AiDialogProps> = ({
         </ScrollArea>
     </>
   );
-
+  
   const QuizView: React.FC<{ questions: QuizQuestion[] }> = ({ questions }) => {
-    const [answers, setAnswers] = useState<Record<number, string>>({});
-    const [submitted, setSubmitted] = useState(false);
+    const [answers, setAnswers] = useState<Record<number, string>>(quizAttempt?.answers || {});
+    const [submitted, setSubmitted] = useState(!!quizAttempt);
   
     const handleAnswerChange = (questionIndex: number, value: string) => {
       setAnswers(prev => ({ ...prev, [questionIndex]: value }));
     };
   
     const handleSubmit = () => {
+      onQuizSubmit(questions, answers);
       setSubmitted(true);
     };
 
     const getResultColor = (index: number, option?: string) => {
         if (!submitted) return '';
         const question = questions[index];
-        const isCorrect = question.answer === answers[index];
+        const userAnswer = quizAttempt?.answers[index] || answers[index];
+        const isCorrect = question.answer === userAnswer;
         
-        if(option) { // For multiple choice options
-            if(option === question.answer) return 'text-green-700 font-bold';
-            if(option === answers[index] && !isCorrect) return 'text-red-700';
-        } else { // For the explanation text
+        if (option) { 
+            if (option === question.answer) return 'text-green-700 font-bold';
+            if (option === userAnswer && !isCorrect) return 'text-red-700 font-bold';
+        } else {
             return isCorrect ? 'text-green-700' : 'text-red-700';
         }
         return '';
@@ -198,9 +187,9 @@ const AiDialog: React.FC<AiDialogProps> = ({
                 </RadioGroup>
               )}
               {submitted && (
-                 <div className={cn("p-4 rounded-md text-sm bg-muted", getResultColor(index))}>
+                 <div className={cn("p-4 rounded-md text-sm bg-muted prose dark:prose-invert max-w-none", getResultColor(index))}>
                     <p className="font-bold">Correct Answer: {q.answer}</p>
-                    <p>{q.explanation}</p>
+                    <ReactMarkdown>{q.explanation}</ReactMarkdown>
                  </div>
               )}
             </CardContent>
@@ -208,6 +197,17 @@ const AiDialog: React.FC<AiDialogProps> = ({
         ))}
         {!submitted && (
             <Button onClick={handleSubmit} className="w-full">Submit Answers</Button>
+        )}
+        {submitted && quizAttempt && (
+            <Card>
+                <CardHeader>
+                    <CardTitle>Quiz Results & Suggestions</CardTitle>
+                    <CardDescription>Your Score: {quizAttempt.score.toFixed(0)}%</CardDescription>
+                </CardHeader>
+                <CardContent className="prose dark:prose-invert max-w-none">
+                    <ReactMarkdown>{quizAttempt.suggestions}</ReactMarkdown>
+                </CardContent>
+            </Card>
         )}
       </div>
     );
@@ -221,51 +221,10 @@ const AiDialog: React.FC<AiDialogProps> = ({
         </DialogHeader>
         <ScrollArea className="h-[32rem] pr-4 mt-4">
             {isLoading ? renderLoading('Generating your quiz...') : (
-                quizOutput?.quiz && <QuizView questions={quizOutput.quiz} />
+                (quizOutput?.quiz || quizAttempt?.questions) && <QuizView questions={quizOutput?.quiz || quizAttempt!.questions} />
             )}
         </ScrollArea>
     </>
-  );
-
-  const renderChatContent = () => (
-    <div className="flex flex-col h-[32rem]">
-      <DialogHeader>
-        <DialogTitle>Ask a Question</DialogTitle>
-        <DialogDescription>
-          Ask a question about the document, and the AI will find the answer for you.
-        </DialogDescription>
-      </DialogHeader>
-      <ScrollArea className="flex-1 my-4">
-         <div className="p-4 space-y-4">
-            {isLoading && !chatOutput ? renderLoading('Thinking...') : (
-                chatOutput && (
-                    <div className="p-3 rounded-md bg-muted">
-                        <p className="text-sm">{chatOutput.answer}</p>
-                    </div>
-                )
-            )}
-             {isLoading && chatOutput && (
-                <div className="flex items-center space-x-2">
-                    <Loader2 className="animate-spin h-4 w-4" />
-                    <span>Thinking...</span>
-                </div>
-             )}
-        </div>
-      </ScrollArea>
-      <DialogFooter>
-        <form onSubmit={handleChatSubmit} className="flex w-full space-x-2">
-          <Input
-            value={question}
-            onChange={(e) => setQuestion(e.target.value)}
-            placeholder="Type your question here..."
-            disabled={isLoading}
-          />
-          <Button type="submit" disabled={isLoading || !question.trim()}>
-            {isLoading ? <Loader2 className="animate-spin" /> : <Send />}
-          </Button>
-        </form>
-      </DialogFooter>
-    </div>
   );
 
   const renderContent = () => {
@@ -277,8 +236,6 @@ const AiDialog: React.FC<AiDialogProps> = ({
             return renderGlossaryContent();
         case 'quiz':
             return renderQuizContent();
-        case 'chat':
-            return renderChatContent();
         default:
             return null;
     }

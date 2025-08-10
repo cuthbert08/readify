@@ -1,3 +1,4 @@
+
 'use server';
 
 /**
@@ -14,11 +15,15 @@ import {z} from 'genkit';
 const ChatWithPdfInputSchema = z.object({
   pdfText: z.string().describe('The text content of the PDF document.'),
   question: z.string().describe('The user\'s question about the document.'),
+  chatHistory: z.array(z.object({
+      role: z.enum(['user', 'assistant']),
+      content: z.string(),
+  })).optional().describe('The history of the conversation so far.'),
 });
 export type ChatWithPdfInput = z.infer<typeof ChatWithPdfInputSchema>;
 
 const ChatWithPdfOutputSchema = z.object({
-  answer: z.string().describe('The answer to the user\'s question, based on the document content.'),
+  answer: z.string().describe('The answer to the user\'s question, formatted in Markdown.'),
 });
 export type ChatWithPdfOutput = z.infer<typeof ChatWithPdfOutputSchema>;
 
@@ -30,15 +35,32 @@ const prompt = ai.definePrompt({
   name: 'chatWithPdfPrompt',
   input: {schema: ChatWithPdfInputSchema},
   output: {schema: ChatWithPdfOutputSchema},
-  prompt: `You are a helpful assistant. Your task is to answer questions about the provided document.
-  Base your answers *only* on the content of the text below. If the answer cannot be found in the text, say "I'm sorry, I can't find the answer to that in this document."
+  prompt: `You are a helpful and knowledgeable assistant. Your primary task is to answer questions based on the provided document content.
+Your secondary task is to use your general knowledge if the document does not contain the answer.
+
+Follow these rules:
+1.  **Prioritize Document**: Base your answers *only* on the content of the text below.
+2.  **Use General Knowledge**: If the answer cannot be found in the text, use your own knowledge to answer, but you *must* state that the information is not from the document. For example, start your response with "Based on my general knowledge..."
+3.  **Format Responses**: Format your answers using Markdown. Use code blocks for code snippets and proper formatting for mathematical equations.
+4.  **Acknowledge History**: Use the provided chat history to understand the context of the conversation.
+
+  Chat History:
+  ---
+  {{#if chatHistory}}
+    {{#each chatHistory}}
+        **{{role}}**: {{content}}
+    {{/each}}
+  {{else}}
+    No chat history yet.
+  {{/if}}
+  ---
 
   Document Text:
   ---
   {{{pdfText}}}
   ---
 
-  Question:
+  New Question:
   {{{question}}}
   `,
 });

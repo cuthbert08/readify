@@ -10,6 +10,7 @@
  */
 import { ai } from '@/ai/genkit';
 import { GenerateSpeechInputSchema, GenerateSpeechOutputSchema } from '@/ai/schemas';
+import { formatTextForSpeech } from './format-text-for-speech';
 
 // Function to split text into chunks without breaking sentences
 function splitText(text: string, maxLength: number): string[] {
@@ -59,13 +60,17 @@ export const generateSpeech = ai.defineFlow(
         throw new Error("Input text cannot be empty.");
     }
 
-    console.log('--- Starting speech generation flow (client-side merge) ---');
+    console.log('--- Starting speech generation flow ---');
 
-    const textChunks = splitText(input.text, 4000);
+    // Step 1: Format the text for better speech quality
+    console.log('Formatting text for speech...');
+    const { formattedText } = await formatTextForSpeech({ rawText: input.text });
+
+    const textChunks = splitText(formattedText, 4000);
     const audioDataUris: string[] = [];
 
     try {
-        console.log(`Generated ${textChunks.length} text chunks.`);
+        console.log(`Generated ${textChunks.length} text chunks from formatted text.`);
         
         // Generate audio for each chunk in parallel
         const audioGenerationPromises = textChunks.map(async (chunk, index) => {

@@ -6,6 +6,21 @@ import { del as deleteBlob } from '@vercel/blob';
 import { getSession, type SessionPayload } from './session';
 import { randomUUID } from 'crypto';
 
+export interface ChatMessage {
+  id: string;
+  role: 'user' | 'assistant';
+  content: string;
+  createdAt: string;
+}
+
+export interface QuizAttempt {
+    questions: any[]; // Store the questions for review
+    answers: Record<number, string>;
+    score: number;
+    suggestions: string;
+    completedAt: string;
+}
+
 export interface Document {
   id: string | null; 
   userId: string;
@@ -13,7 +28,9 @@ export interface Document {
   pdfUrl: string;
   audioUrl: string | null;
   zoomLevel: number;
-  createdAt: string; 
+  createdAt: string;
+  chatHistory?: ChatMessage[];
+  quizAttempt?: QuizAttempt | null;
 }
 
 export interface User {
@@ -46,13 +63,7 @@ export async function getUserSession(): Promise<UserSession | null> {
   return null;
 }
 
-export async function saveDocument(docData: {
-  id?: string | null;
-  fileName?: string;
-  pdfUrl?: string;
-  audioUrl?: string | null;
-  zoomLevel?: number;
-}): Promise<Document> {
+export async function saveDocument(docData: Partial<Document>): Promise<Document> {
   const session = await getSession();
   if (!session?.userId || !session.username) {
     throw new Error('Authentication and username required.');
@@ -75,8 +86,6 @@ export async function saveDocument(docData: {
       ...existingDocRaw,
       ...docData,
       id: docId, // Ensure id is set correctly
-      audioUrl: docData.audioUrl !== undefined ? docData.audioUrl : existingDocRaw.audioUrl,
-      zoomLevel: docData.zoomLevel !== undefined ? docData.zoomLevel : existingDocRaw.zoomLevel,
     };
     await kv.set(`readify:doc:${docId}`, updatedDoc);
     return updatedDoc;
@@ -94,6 +103,7 @@ export async function saveDocument(docData: {
       audioUrl: docData.audioUrl || null,
       zoomLevel: docData.zoomLevel || 1,
       createdAt: new Date().toISOString(),
+      chatHistory: [],
     };
     
     const pipeline = kv.pipeline();
@@ -155,7 +165,9 @@ export async function deleteDocument(docId: string): Promise<{ success: boolean,
             urlsToDelete.push(doc.audioUrl);
         }
         
-        await deleteBlob(urlsToDelete);
+        if(urlsToDelete.length > 0) {
+            await deleteBlob(urlsToDelete);
+        }
 
         // Delete from KV
         const pipeline = kv.pipeline();

@@ -4,8 +4,9 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import * as pdfjsLib from 'pdfjs-dist';
 import type { PDFDocumentProxy, TextItem as PdfTextItem } from 'pdfjs-dist/types/src/display/api';
-import { UploadCloud, FileText, Loader2, LogOut, Save, Library, Download, Bot, Lightbulb, HelpCircle, Cloud, CloudOff, Settings, Menu, Home, BarChart, BookOpenCheck, BrainCircuit, Mic, FastForward, Rewind, Wind, Maximize, Minimize, ZoomIn, ZoomOut, Trash2, XCircle } from 'lucide-react';
+import { UploadCloud, FileText, Loader2, LogOut, Save, Library, Download, Bot, Lightbulb, HelpCircle, Cloud, CloudOff, Settings, Menu, Home, BarChart, BookOpenCheck, BrainCircuit, Mic, FastForward, Rewind, Wind, Maximize, Minimize, ZoomIn, ZoomOut, Trash2, XCircle, MessageSquare } from 'lucide-react';
 import { useRouter } from 'next/navigation';
+import { randomUUID } from 'crypto';
 import PdfViewer from '@/components/pdf-viewer';
 import AudioPlayer from '@/components/audio-player';
 import { useToast } from "@/hooks/use-toast";
@@ -19,7 +20,7 @@ import { generateGlossary, GenerateGlossaryOutput, GlossaryItem } from '@/ai/flo
 import { generateQuiz, type GenerateQuizOutput } from '@/ai/flows/quiz-flow';
 import { cleanPdfText } from '@/ai/flows/clean-text-flow';
 import { Sidebar, SidebarHeader, SidebarMenu, SidebarMenuItem, SidebarMenuButton, SidebarFooter, SidebarContent } from '@/components/ui/sidebar';
-import { getDocuments, saveDocument, Document, getUserSession, deleteDocument } from '@/lib/db';
+import { getDocuments, saveDocument, Document, getUserSession, ChatMessage } from '@/lib/db';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import AiDialog, { AiDialogType } from '@/components/ai-dialog';
 import { Separator } from '@/components/ui/separator';
@@ -33,6 +34,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Textarea } from '@/components/ui/textarea';
 import { Card } from '@/components/ui/card';
 import { ThemeToggle } from '@/components/theme-toggle';
+import { ChatWindow } from '@/components/chat-window';
+import { generateQuizFeedback } from '@/ai/flows/quiz-feedback-flow';
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
   'pdfjs-dist/build/pdf.worker.min.mjs',
@@ -92,9 +95,8 @@ export default function ReadPage() {
   const [aiDialogType, setAiDialogType] = useState<AiDialogType>('summary');
   const [aiIsLoading, setAiIsLoading] = useState(false);
   const [aiSummaryOutput, setAiSummaryOutput] = useState<SummarizePdfOutput | null>(null);
-  const [aiChatOutput, setAiChatOutput] = useState<ChatWithPdfOutput | null>(null);
-  const [aiGlossaryOutput, setAiGlossaryOutput] = useState<GenerateGlossaryOutput | null>(null);
   const [aiQuizOutput, setAiQuizOutput] = useState<GenerateQuizOutput | null>(null);
+  const [aiGlossaryOutput, setAiGlossaryOutput] = useState<GenerateGlossaryOutput | null>(null);
 
   const [showControls, setShowControls] = useState(true);
   const [isAdmin, setIsAdmin] = useState(false);
@@ -104,12 +106,14 @@ export default function ReadPage() {
   const [generationState, setGenerationState] = useState<GenerationState>('idle');
   const generationAbortController = useRef<AbortController | null>(null);
 
-
   const [synthesisText, setSynthesisText] = useState('');
   const [synthesisVoice, setSynthesisVoice] = useState('alloy');
   const [synthesisRate, setSynthesisRate] = useState(1.0);
   const [isSynthesizing, setIsSynthesizing] = useState(false);
   const [synthesisAudioUrl, setSynthesisAudioUrl] = useState<string | null>(null);
+
+  const [isChatOpen, setIsChatOpen] = useState(false);
+  const [isChatLoading, setIsChatLoading] = useState(false);
 
   const { toast } = useToast();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -117,7 +121,7 @@ export default function ReadPage() {
   const previewAudioRef = useRef<HTMLAudioElement | null>(null);
   const viewerContainerRef = useRef<HTMLDivElement>(null);
   const controlsTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const localAudioUrlRef = useRef<string | null>(null); // For locally generated audio before saving
+  const localAudioUrlRef = useRef<string | null>(null); 
   const router = useRouter();
 
 
@@ -205,6 +209,7 @@ export default function ReadPage() {
     setDocumentText('');
     setPdfState('idle');
     setZoomLevel(1);
+    setIsChatOpen(false);
     if (audioRef.current) {
         audioRef.current.src = "";
     }
@@ -222,9 +227,8 @@ export default function ReadPage() {
     setPdfState('loading');
     setLoadingProgress(0);
     setAiSummaryOutput(null);
-    setAiChatOutput(null);
-    setAiGlossaryOutput(null);
     setAiQuizOutput(null);
+    setAiGlossaryOutput(null);
     
     try {
       const loadingTask = pdfjsLib.getDocument(typeof source === 'string' ? { url: source } : { data: await source.arrayBuffer() });
@@ -241,7 +245,6 @@ export default function ReadPage() {
       }
       setDocumentText(fullText);
 
-      // If it's a new file upload, save it immediately to get an ID and URL
       if (source instanceof File) {
          const uploadResponse = await fetch('/api/upload', {
             method: 'POST',
@@ -254,16 +257,15 @@ export default function ReadPage() {
         const savedDoc = await saveDocument({
             fileName: source.name,
             pdfUrl: pdfBlob.url,
-            zoomLevel: 1,
         });
         setActiveDoc(savedDoc);
-        fetchUserDocuments(); // Refresh list with new doc
+        fetchUserDocuments();
       } else if (existingDoc) {
         setActiveDoc(existingDoc);
         setZoomLevel(existingDoc.zoomLevel || 1);
          if (existingDoc.audioUrl && audioRef.current) {
             audioRef.current.src = existingDoc.audioUrl;
-            audioRef.current.load(); // Explicitly load the new audio
+            audioRef.current.load();
         }
       }
 
@@ -306,7 +308,7 @@ export default function ReadPage() {
     if (!audioRef.current) return;
     if (isSpeaking) {
       audioRef.current.pause();
-    } else if (audioRef.current.src && audioRef.current.src !== window.location.href) { // Ensure src is valid
+    } else if (audioRef.current.src && audioRef.current.src !== window.location.href) { 
       try {
         await audioRef.current.play();
       } catch (error) {
@@ -334,20 +336,14 @@ export default function ReadPage() {
       const signal = generationAbortController.current.signal;
       
       setGenerationState('generating');
-      toast({ title: "Starting Audio Generation", description: "Cleaning text and preparing to generate speech..." });
+      toast({ title: "Starting Audio Generation", description: "Formatting text and preparing to generate speech..." });
 
       try {
-        const { cleanedText } = await cleanPdfText({ rawText: documentText });
-
-        if (signal.aborted) throw new DOMException('Aborted', 'AbortError');
-        
-        toast({ title: "Generating Speech", description: "This may take a moment..." });
-
         const response = await fetch('/api/generate-speech', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-                text: cleanedText,
+                text: documentText,
                 voice: selectedVoice,
                 speakingRate: speakingRate,
             }),
@@ -360,7 +356,6 @@ export default function ReadPage() {
         
         const mergedAudioBlob = await mergeAudio(result.audioDataUris);
 
-        // Upload the new audio blob
         const audioFileName = `${activeDoc.fileName.replace(/\.pdf$/i, '') || 'audio'}.mp3`;
         const uploadAudioResponse = await fetch('/api/upload', {
             method: 'POST',
@@ -375,19 +370,17 @@ export default function ReadPage() {
         const audioBlobResult = await uploadAudioResponse.json();
         const newAudioUrl = audioBlobResult.url;
 
-        // Save the new audio URL to the database
         const updatedDoc = await saveDocument({
             id: activeDoc.id,
             audioUrl: newAudioUrl,
         });
 
-        // Update local state and UI
         setActiveDoc(updatedDoc);
         if (audioRef.current) {
             audioRef.current.src = newAudioUrl;
             audioRef.current.load();
         }
-        await fetchUserDocuments(); // Refresh the list to show the cloud icon
+        await fetchUserDocuments();
 
         toast({ title: "Success", description: "Audio generated and saved." });
 
@@ -448,6 +441,37 @@ export default function ReadPage() {
       toast({ variant: "destructive", title: "Audio Error", description: `Could not preview voice: ${errorMessage}` });
     }
   }
+  
+  const handlePlayAiResponse = async (text: string) => {
+    try {
+      const response = await fetch('/api/generate-speech', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          text,
+          voice: selectedVoice,
+          speakingRate: 1.0, // Use a default rate for chat responses
+        }),
+      });
+
+      if (!response.ok) throw new Error('Speech generation API failed');
+      const result = await response.json();
+      
+      const mergedAudioBlob = await mergeAudio(result.audioDataUris);
+      const audioUrl = URL.createObjectURL(mergedAudioBlob);
+      
+      if (previewAudioRef.current) {
+          previewAudioRef.current.src = audioUrl;
+          previewAudioRef.current.play();
+          previewAudioRef.current.onended = () => {
+              URL.revokeObjectURL(audioUrl);
+          };
+      }
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred';
+      toast({ variant: "destructive", title: "Audio Error", description: `Could not play response: ${errorMessage}` });
+    }
+  };
 
   const handleSynthesize = async () => {
       if (!synthesisText.trim()) {
@@ -476,12 +500,12 @@ export default function ReadPage() {
             throw new Error(errorData.error || 'API call failed');
           }
 
-          const result = await response.json(); // { audioDataUris: [...] }
+          const result = await response.json();
           
           if (result.audioDataUris && result.audioDataUris.length > 0) {
               const mergedAudioBlob = await mergeAudio(result.audioDataUris);
               const audioUrl = URL.createObjectURL(mergedAudioBlob);
-              localAudioUrlRef.current = audioUrl; // Track for cleanup
+              localAudioUrlRef.current = audioUrl;
               setSynthesisAudioUrl(audioUrl);
           }
       } catch (error) {
@@ -519,14 +543,13 @@ export default function ReadPage() {
     }
   };
 
-  const handleAiAction = async (type: AiDialogType, data?: any) => {
+  const handleAiAction = async (type: AiDialogType) => {
     setAiDialogType(type);
     setIsAiDialogOpen(true);
     setAiIsLoading(true);
-    setAiChatOutput(null);
     setAiSummaryOutput(null);
-    setAiGlossaryOutput(null);
     setAiQuizOutput(null);
+    setAiGlossaryOutput(null);
 
     try {
       if ((type === 'summary' || type === 'key-points') && documentText) {
@@ -536,8 +559,12 @@ export default function ReadPage() {
           const result = await generateGlossary({ documentText: documentText });
           setAiGlossaryOutput(result);
       } else if (type === 'quiz' && documentText) {
-          const result = await generateQuiz({ documentText });
-          setAiQuizOutput(result);
+          if (activeDoc?.quizAttempt) {
+            setAiQuizOutput({ quiz: activeDoc.quizAttempt.questions });
+          } else {
+            const result = await generateQuiz({ documentText });
+            setAiQuizOutput(result);
+          }
       }
     } catch (error) {
       console.error(`AI Error (${type}):`, error);
@@ -547,18 +574,87 @@ export default function ReadPage() {
     }
   };
 
-  const handleAiChat = async (question: string) => {
-    if (!documentText || !question) return;
-    setAiIsLoading(true);
-    setAiChatOutput(null);
-    try {
-      const result = await chatWithPdf({ pdfText: documentText, question });
-      setAiChatOutput(result);
-    } catch (error) {
-      console.error('AI Chat Error:', error);
-      toast({ variant: "destructive", title: "AI Error", description: "Could not get an answer." });
+  const handleQuizSubmit = async (questions: any[], answers: Record<number, string>) => {
+    if (!activeDoc || !activeDoc.id) return;
+    
+    let correctCount = 0;
+    const failedQuestions: any[] = [];
+    questions.forEach((q, index) => {
+        if(q.answer === answers[index]){
+            correctCount++;
+        } else {
+            failedQuestions.push({
+                question: q.question,
+                userAnswer: answers[index] || "Not answered",
+                correctAnswer: q.answer,
+            });
+        }
+    });
+
+    const score = (correctCount / questions.length) * 100;
+    
+    let feedback = 'Great job! You got all the questions right!';
+    if(failedQuestions.length > 0) {
+        toast({ title: "Generating Feedback", description: "Analyzing your answers..." });
+        const feedbackResult = await generateQuizFeedback({ documentText, failedQuestions });
+        feedback = feedbackResult.feedback;
     }
-    setAiIsLoading(false);
+
+    const quizAttempt = {
+        questions,
+        answers,
+        score,
+        suggestions: feedback,
+        completedAt: new Date().toISOString()
+    };
+    
+    const updatedDoc = await saveDocument({ id: activeDoc.id, quizAttempt });
+    setActiveDoc(updatedDoc);
+    toast({
+        title: `Quiz Complete! Score: ${score.toFixed(0)}%`,
+        description: "You can review your results and suggestions.",
+    });
+  };
+
+  const handleSendMessage = async (message: string) => {
+      if(!activeDoc || !activeDoc.id || !documentText) return;
+
+      const userMessage: ChatMessage = {
+          id: randomUUID(),
+          role: 'user',
+          content: message,
+          createdAt: new Date().toISOString(),
+      };
+      
+      const updatedHistory = [...(activeDoc.chatHistory || []), userMessage];
+      setActiveDoc(prev => prev ? {...prev, chatHistory: updatedHistory} : null);
+      setIsChatLoading(true);
+
+      try {
+          const result = await chatWithPdf({
+              pdfText: documentText,
+              question: message,
+              chatHistory: updatedHistory.slice(-10), // Send last 10 messages for context
+          });
+
+          const assistantMessage: ChatMessage = {
+              id: randomUUID(),
+              role: 'assistant',
+              content: result.answer,
+              createdAt: new Date().toISOString(),
+          };
+
+          const finalHistory = [...updatedHistory, assistantMessage];
+          
+          const updatedDoc = await saveDocument({ id: activeDoc.id, chatHistory: finalHistory });
+          setActiveDoc(updatedDoc);
+
+      } catch (error) {
+          toast({ variant: "destructive", title: "Chat Error", description: "Could not get an answer." });
+          setActiveDoc(prev => prev ? {...prev, chatHistory: updatedHistory} : null);
+      } finally {
+          setIsChatLoading(false);
+      }
   }
 
   const toggleFullScreen = () => {
@@ -587,7 +683,6 @@ export default function ReadPage() {
   }, []);
 
   useEffect(() => {
-    // Auto-save zoom level
     if (activeDoc?.id && !isSaving && generationState === 'idle') {
       const timer = setTimeout(() => {
         saveDocument({
@@ -607,7 +702,6 @@ export default function ReadPage() {
       }
   }
 
-  // Memoize the prop for PdfViewer to prevent unnecessary re-renders
   const pdfDocProp = useMemo(() => {
     if (!activeDoc) return null;
     return { url: activeDoc.pdfUrl };
@@ -821,13 +915,13 @@ export default function ReadPage() {
                       <SidebarMenuItem>
                           <SidebarMenuButton onClick={() => handleAiAction('quiz')} disabled={pdfState !== 'loaded'}>
                               <BrainCircuit />
-                              Generate Quiz
+                              {activeDoc?.quizAttempt ? 'Review Quiz' : 'Generate Quiz'}
                           </SidebarMenuButton>
                       </SidebarMenuItem>
                       <SidebarMenuItem>
-                      <SidebarMenuButton onClick={() => handleAiAction('chat')} disabled={pdfState !== 'loaded'}>
-                          <HelpCircle />
-                          Ask a Question
+                      <SidebarMenuButton onClick={() => setIsChatOpen(true)} disabled={pdfState !== 'loaded'}>
+                          <MessageSquare />
+                          Chat with Document
                       </SidebarMenuButton>
                       </SidebarMenuItem>
                   </div>
@@ -956,6 +1050,16 @@ export default function ReadPage() {
                 </div>
             )}
         </div>
+        
+        {isChatOpen && activeDoc && (
+            <ChatWindow 
+                chatHistory={activeDoc.chatHistory || []}
+                isLoading={isChatLoading}
+                onSendMessage={handleSendMessage}
+                onClose={() => setIsChatOpen(false)}
+                onPlayAudio={handlePlayAiResponse}
+            />
+        )}
 
         <audio 
           ref={audioRef} 
@@ -973,11 +1077,10 @@ export default function ReadPage() {
           type={aiDialogType}
           isLoading={aiIsLoading}
           summaryOutput={aiSummaryOutput}
-          chatOutput={aiChatOutput}
           glossaryOutput={aiGlossaryOutput}
-          explanationOutput={null}
           quizOutput={aiQuizOutput}
-          onChatSubmit={handleAiChat}
+          quizAttempt={activeDoc?.quizAttempt || null}
+          onQuizSubmit={handleQuizSubmit}
         />
       </div>
     </TooltipProvider>
