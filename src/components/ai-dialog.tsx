@@ -17,7 +17,7 @@ import type { GenerateGlossaryOutput } from '@/ai/flows/glossary-flow';
 import type { GenerateQuizOutput, QuizQuestion } from '@/ai/schemas/quiz';
 import { ScrollArea } from './ui/scroll-area';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from './ui/accordion';
-import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
 import { RadioGroup, RadioGroupItem } from './ui/radio-group';
 import { Label } from './ui/label';
 import { cn } from '@/lib/utils';
