@@ -4,12 +4,12 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Card, CardHeader, CardTitle, CardContent, CardFooter } from './ui/card';
 import { Button } from './ui/button';
-import { Input } from './ui/input';
 import { ScrollArea } from './ui/scroll-area';
 import { Loader2, Minus, Send, X, Volume2 } from 'lucide-react';
 import { type ChatMessage } from '@/lib/db';
 import ReactMarkdown from 'react-markdown';
 import { DraggableCore } from 'react-draggable';
+import { Textarea } from './ui/textarea';
 
 type ChatWindowProps = {
   chatHistory: ChatMessage[];
@@ -34,11 +34,18 @@ export function ChatWindow({ chatHistory, isLoading, onSendMessage, onClose, onP
     }
   }, [chatHistory]);
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSubmit = (e?: React.FormEvent) => {
+    e?.preventDefault();
     if (message.trim()) {
       onSendMessage(message);
       setMessage('');
+    }
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      handleSubmit();
     }
   };
 
@@ -95,14 +102,17 @@ export function ChatWindow({ chatHistory, isLoading, onSendMessage, onClose, onP
             </ScrollArea>
           </CardContent>
           <CardFooter className="p-4">
-            <form onSubmit={handleSubmit} className="flex w-full gap-2">
-              <Input
+            <form onSubmit={handleSubmit} className="flex w-full gap-2 items-start">
+              <Textarea
                 value={message}
                 onChange={(e) => setMessage(e.target.value)}
-                placeholder="Ask a question..."
+                onKeyDown={handleKeyDown}
+                placeholder="Ask a question... (Shift + Enter for new line)"
                 disabled={isLoading}
+                className="min-h-[40px] max-h-48 resize-y"
+                rows={1}
               />
-              <Button type="submit" disabled={isLoading || !message.trim()}>
+              <Button type="submit" disabled={isLoading || !message.trim()} className="self-end">
                 {isLoading ? <Loader2 className="animate-spin" /> : <Send />}
               </Button>
             </form>
