@@ -3,6 +3,9 @@
 
 import { Resend } from 'resend';
 import { WelcomeEmail } from '@/components/emails/welcome-email';
+import { config } from 'dotenv';
+
+config(); // Explicitly load .env variables
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 const fromEmail = process.env.FROM_EMAIL || 'onboarding@resend.dev';
