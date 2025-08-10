@@ -1,6 +1,5 @@
 
 'use server';
-import 'dotenv/config';
 
 import { kv } from '@vercel/kv';
 import { getSession } from './session';
