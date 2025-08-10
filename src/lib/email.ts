@@ -32,6 +32,7 @@ export async function sendWelcomeEmail(
     // Catch the error and re-throw it to ensure the calling function knows about it.
     // This now includes our more specific error from above.
     console.error('Error in sendWelcomeEmail:', error);
-    throw error;
+    const message = error instanceof Error ? error.message : JSON.stringify(error);
+    throw new Error(`Failed to send welcome email: ${message}`);
   }
 }
