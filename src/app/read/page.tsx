@@ -364,7 +364,11 @@ export default function ReadPage() {
         const audioFileName = `${activeDoc.fileName.replace(/\.pdf$/i, '') || 'audio'}.mp3`;
         const uploadAudioResponse = await fetch('/api/upload', {
             method: 'POST',
-            headers: { 'Content-Type': 'audio/mp3', 'x-vercel-filename': audioFileName },
+            headers: { 
+                'Content-Type': 'audio/mp3', 
+                'x-vercel-filename': audioFileName,
+                'x-doc-id': activeDoc.id,
+            },
             body: mergedAudioBlob,
         });
         if (!uploadAudioResponse.ok) throw new Error('Audio Upload failed');
@@ -979,5 +983,3 @@ export default function ReadPage() {
     </TooltipProvider>
   );
 }
-
-    

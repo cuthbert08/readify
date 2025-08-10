@@ -32,6 +32,10 @@ import { Loader2 } from 'lucide-react';
 const formSchema = z.object({
   name: z.string().min(2, 'Name must be at least 2 characters.'),
   email: z.string().email('Invalid email address.'),
+  username: z.string()
+    .min(3, 'Username must be at least 3 characters.')
+    .max(20, 'Username cannot be longer than 20 characters.')
+    .regex(/^[a-z0-9_.]+$/, 'Username can only contain lowercase letters, numbers, underscores, and periods.'),
   password: z.string().min(8, 'Password must be at least 8 characters.'),
   role: z.enum(['User', 'Admin']),
 });
@@ -52,6 +56,7 @@ export default function AddUserDialog({ isOpen, onClose, onUserAdded }: AddUserD
     defaultValues: {
       name: '',
       email: '',
+      username: '',
       password: '',
       role: 'User',
     },
@@ -114,6 +119,19 @@ export default function AddUserDialog({ isOpen, onClose, onUserAdded }: AddUserD
                   <FormLabel>Email</FormLabel>
                   <FormControl>
                     <Input placeholder="user@example.com" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="username"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Username</FormLabel>
+                  <FormControl>
+                    <Input placeholder="john.doe" {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>

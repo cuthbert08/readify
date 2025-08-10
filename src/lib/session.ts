@@ -8,6 +8,7 @@ const key = new TextEncoder().encode(secretKey);
 export interface SessionPayload {
     userId: string;
     isAdmin: boolean;
+    username: string | null;
     expires?: Date; // Expires is used on the client-side for cookie management
 }
 
@@ -39,9 +40,9 @@ export async function getSession(): Promise<SessionPayload | null> {
   return session;
 }
 
-export async function createSession(userId: string, isAdmin: boolean) {
+export async function createSession(userId: string, isAdmin: boolean, username: string | null) {
     const expires = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
-    const sessionPayload = { userId, isAdmin };
+    const sessionPayload = { userId, isAdmin, username };
     
     const session = await encrypt(sessionPayload);
 

@@ -20,6 +20,7 @@ export interface User {
     id: string;
     name: string;
     email: string;
+    username: string | null; // Can be null for users who haven't set it yet
     password: string; // This is the hashed password
     isAdmin: boolean;
     createdAt: string; 
@@ -33,7 +34,7 @@ export interface UserSession extends SessionPayload {
 export async function getUserSession(): Promise<UserSession | null> {
   const session = await getSession();
   if (session?.userId) {
-    const user: User | null = await kv.get(`user-by-id:${session.userId}`);
+    const user: User | null = await kv.get(`readify:user:id:${session.userId}`);
     if (user) {
         return {
             ...session,
@@ -53,16 +54,16 @@ export async function saveDocument(docData: {
   zoomLevel?: number;
 }): Promise<Document> {
   const session = await getSession();
-  if (!session?.userId) {
-    throw new Error('Authentication required.');
+  if (!session?.userId || !session.username) {
+    throw new Error('Authentication and username required.');
   }
   const userId = session.userId;
 
   let docId = docData.id;
-  const userDocListKey = `user:${userId}:docs`;
+  const userDocListKey = `readify:user:${userId}:docs`;
 
   if (docId) {
-    const existingDocRaw: Document | null = await kv.get(`doc:${docId}`);
+    const existingDocRaw: Document | null = await kv.get(`readify:doc:${docId}`);
     if (!existingDocRaw) {
         throw new Error('Document not found.');
     }
@@ -77,7 +78,7 @@ export async function saveDocument(docData: {
       audioUrl: docData.audioUrl !== undefined ? docData.audioUrl : existingDocRaw.audioUrl,
       zoomLevel: docData.zoomLevel !== undefined ? docData.zoomLevel : existingDocRaw.zoomLevel,
     };
-    await kv.set(`doc:${docId}`, updatedDoc);
+    await kv.set(`readify:doc:${docId}`, updatedDoc);
     return updatedDoc;
 
   } else {
@@ -96,7 +97,7 @@ export async function saveDocument(docData: {
     };
     
     const pipeline = kv.pipeline();
-    pipeline.set(`doc:${docId}`, newDoc);
+    pipeline.set(`readify:doc:${docId}`, newDoc);
     pipeline.lpush(userDocListKey, docId);
     await pipeline.exec();
 
@@ -110,7 +111,7 @@ export async function getDocuments(): Promise<Document[]> {
     return [];
   }
   const userId = session.userId;
-  const userDocListKey = `user:${userId}:docs`;
+  const userDocListKey = `readify:user:${userId}:docs`;
 
   const docIds = await kv.lrange<string[]>(userDocListKey, 0, -1);
   if (docIds.length === 0) {
@@ -122,7 +123,7 @@ export async function getDocuments(): Promise<Document[]> {
     return [];
   }
 
-  const docKeys = validDocIds.map(id => `doc:${id}`);
+  const docKeys = validDocIds.map(id => `readify:doc:${id}`);
   const docs = await kv.mget<Document[]>(...docKeys);
 
   return docs
@@ -137,7 +138,7 @@ export async function deleteDocument(docId: string): Promise<{ success: boolean,
     }
 
     try {
-        const docKey = `doc:${docId}`;
+        const docKey = `readify:doc:${docId}`;
         const doc: Document | null = await kv.get(docKey);
 
         if (!doc) {
@@ -159,7 +160,7 @@ export async function deleteDocument(docId: string): Promise<{ success: boolean,
         // Delete from KV
         const pipeline = kv.pipeline();
         pipeline.del(docKey);
-        pipeline.lrem(`user:${doc.userId}:docs`, 1, docId);
+        pipeline.lrem(`readify:user:${doc.userId}:docs`, 1, docId);
         await pipeline.exec();
         
         return { success: true };

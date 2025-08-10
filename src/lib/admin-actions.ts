@@ -35,7 +35,7 @@ async function checkAdmin() {
 
 export async function getAllUsers(): Promise<User[]> {
   await checkAdmin();
-  const userKeys = await kv.keys('user-by-id:*');
+  const userKeys = await kv.keys('readify:user:id:*');
   if (userKeys.length === 0) return [];
   
   if(!userKeys.length) return [];
@@ -52,19 +52,19 @@ export async function getAllDocuments(): Promise<DocumentWithAuthorEmail[]> {
     const users = await getAllUsers();
     const userEmailMap = new Map(users.map(u => [u.id, u.email]));
 
-    const allUserKeys = await kv.keys('user-by-id:*');
+    const allUserKeys = await kv.keys('readify:user:id:*');
     if (allUserKeys.length === 0) {
         return [];
     }
 
-    const userIds = allUserKeys.map(key => key.replace('user-by-id:', ''));
+    const userIds = allUserKeys.map(key => key.replace('readify:user:id:', ''));
     
     if (userIds.length === 0) {
         return [];
     }
     
     const pipeline = kv.pipeline();
-    userIds.forEach(userId => pipeline.lrange(`user:${userId}:docs`, 0, -1));
+    userIds.forEach(userId => pipeline.lrange(`readify:user:${userId}:docs`, 0, -1));
     const allDocIdLists = await pipeline.exec() as string[][];
     
     const allDocIds = allDocIdLists.flat();
@@ -75,7 +75,7 @@ export async function getAllDocuments(): Promise<DocumentWithAuthorEmail[]> {
         return [];
     }
     
-    const docKeys = uniqueDocIds.map(id => `doc:${id}`);
+    const docKeys = uniqueDocIds.map(id => `readify:doc:${id}`);
     const allDocs = await kv.mget<Document[]>(...docKeys);
     
     const validDocs = allDocs.filter((d): d is Document => d !== null);
@@ -93,7 +93,7 @@ export async function deleteUser(userId: string): Promise<{ success: boolean; me
   await checkAdmin();
   
   try {
-    const user: User | null = await kv.get(`user-by-id:${userId}`);
+    const user: User | null = await kv.get(`readify:user:id:${userId}`);
     if (!user) {
       throw new Error('User not found');
     }
@@ -104,21 +104,24 @@ export async function deleteUser(userId: string): Promise<{ success: boolean; me
 
     const pipeline = kv.pipeline();
 
-    const docListKey = `user:${userId}:docs`;
+    const docListKey = `readify:user:${userId}:docs`;
     const docIds: string[] = await kv.lrange(docListKey, 0, -1);
     
     if (docIds.length > 0) {
       const validDocIds = docIds.filter(id => id);
       if (validDocIds.length > 0) {
-        const docKeysToDelete = validDocIds.map(id => `doc:${id}`);
+        const docKeysToDelete = validDocIds.map(id => `readify:doc:${id}`);
         // @ts-ignore
         pipeline.del(...docKeysToDelete);
       }
     }
     
     pipeline.del(docListKey);
-    pipeline.del(`user-by-id:${userId}`);
-    pipeline.del(`user:${user.email}`);
+    pipeline.del(`readify:user:id:${userId}`);
+    if (user.username) {
+        pipeline.del(`readify:user:username:${user.username}`);
+    }
+    pipeline.del(`readify:user:email:${user.email}`);
 
     await pipeline.exec();
 
@@ -133,18 +136,23 @@ export async function deleteUser(userId: string): Promise<{ success: boolean; me
 export async function createUser(userData: {
     name: string;
     email: string;
+    username: string;
     password: string;
     role: 'Admin' | 'User';
 }): Promise<{ success: boolean, message?: string }> {
     await checkAdmin();
 
     try {
-        const { name, email, password, role } = userData;
+        const { name, email, username, password, role } = userData;
 
-        const existingUser: User | null = await kv.get(`user:${email}`);
-        if (existingUser) {
+        const existingUserByEmail: User | null = await kv.get(`readify:user:email:${email}`);
+        if (existingUserByEmail) {
             return { success: false, message: 'User with this email already exists.' };
         }
+        const existingUserByUsername: User | null = await kv.get(`readify:user:username:${username}`);
+        if (existingUserByUsername) {
+            return { success: false, message: 'User with this username already exists.'};
+        }
 
         const hashedPassword = await bcrypt.hash(password, 10);
         const userId = randomUUID();
@@ -152,14 +160,16 @@ export async function createUser(userData: {
             id: userId,
             name,
             email,
+            username,
             password: hashedPassword,
             isAdmin: role === 'Admin',
             createdAt: new Date().toISOString(),
         };
 
         const pipeline = kv.pipeline();
-        pipeline.set(`user:${email}`, newUser);
-        pipeline.set(`user-by-id:${userId}`, newUser);
+        pipeline.set(`readify:user:email:${email}`, newUser);
+        pipeline.set(`readify:user:username:${username}`, newUser);
+        pipeline.set(`readify:user:id:${userId}`, newUser);
         await pipeline.exec();
 
         return { success: true };

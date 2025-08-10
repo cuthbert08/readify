@@ -11,7 +11,8 @@ export async function POST(req: NextRequest) {
   try {
     const { email, password } = await req.json();
 
-    const user: User | null = await kv.get(`user:${email}`);
+    // Use the new namespaced key
+    const user: User | null = await kv.get(`readify:user:email:${email}`);
 
     if (!user) {
       console.log(`Login attempt failed: User not found for email ${email}`);
@@ -25,9 +26,14 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ message: 'Invalid credentials' }, { status: 401 });
     }
 
-    await createSession(user.id, user.isAdmin);
+    await createSession(user.id, user.isAdmin, user.username);
+    
+    let redirectUrl = user.isAdmin ? '/admin' : '/read';
+    // If user has not set a username, redirect to the welcome page first
+    if (!user.username) {
+        redirectUrl = '/welcome';
+    }
 
-    const redirectUrl = user.isAdmin ? '/admin' : '/read';
     console.log(`Login successful for ${email}, redirecting to ${redirectUrl}`);
     return NextResponse.json({ success: true, redirectUrl });
 

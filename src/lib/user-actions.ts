@@ -19,7 +19,7 @@ export async function changeUserPassword(data: {
   }
 
   try {
-    const user: User | null = await kv.get(`user-by-id:${session.userId}`);
+    const user: User | null = await kv.get(`readify:user:id:${session.userId}`);
     if (!user) {
       return { success: false, message: 'User not found.' };
     }
@@ -37,12 +37,14 @@ export async function changeUserPassword(data: {
     };
 
     const pipeline = kv.pipeline();
-    pipeline.set(`user:${user.email}`, updatedUser);
-    pipeline.set(`user-by-id:${user.id}`, updatedUser);
+    pipeline.set(`readify:user:email:${user.email}`, updatedUser);
+    pipeline.set(`readify:user:id:${user.id}`, updatedUser);
+    if(user.username) {
+        pipeline.set(`readify:user:username:${user.username}`, updatedUser);
+    }
     await pipeline.exec();
 
-    // Re-create the session to ensure it's fresh, although not strictly necessary for password change
-    await createSession(user.id, user.isAdmin);
+    await createSession(user.id, user.isAdmin, user.username);
 
     return { success: true };
   } catch (error) {
