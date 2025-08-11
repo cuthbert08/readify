@@ -64,26 +64,48 @@ async function generateOpenAI(textChunks: string[], voice: string, speed: number
     return Promise.all(audioGenerationPromises);
 }
 
+// Helper to introduce a delay
+const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
 async function generateAmazon(textChunks: string[], voice: string, speed: number) {
     const pollyUrl = process.env.AMAZON_POLLY_API_URL;
     if (!pollyUrl) throw new Error('Amazon Polly API URL is not configured.');
 
-    const audioGenerationPromises = textChunks.map(async (chunk) => {
+    const audioUris: string[] = [];
+
+    // Process chunks sequentially with a small delay to avoid overwhelming the API
+    for (let i = 0; i < textChunks.length; i++) {
+        const chunk = textChunks[i];
+        console.log(`[Amazon Polly] Processing chunk ${i + 1}/${textChunks.length}, length: ${chunk.length}`);
+
         const response = await fetch(pollyUrl, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 text: chunk,
                 voiceId: voice,
-                speakingRate: speed, // Add speaking rate for Amazon Polly
+                speakingRate: speed,
             }),
         });
-        if (!response.ok) throw new Error(`Failed to get audio from Amazon Polly: ${await response.text()}`);
+
+        if (!response.ok) {
+            throw new Error(`Failed to get audio from Amazon Polly: ${await response.text()}`);
+        }
+
         const { audio } = await response.json();
-        if (!audio) throw new Error('Amazon Polly response did not include audio data.');
-        return `data:audio/mp3;base64,${audio}`;
-    });
-    return Promise.all(audioGenerationPromises);
+        if (!audio) {
+            throw new Error('Amazon Polly response did not include audio data.');
+        }
+
+        audioUris.push(`data:audio/mp3;base64,${audio}`);
+
+        // Add a small delay between requests to avoid rate limiting issues
+        if (i < textChunks.length - 1) {
+            await sleep(50); 
+        }
+    }
+
+    return audioUris;
 }
 
 // This function can be directly called from client components as a Server Action.
