@@ -3,78 +3,99 @@
 
 import React, { useRef, useEffect, useState } from 'react';
 import * as pdfjsLib from 'pdfjs-dist';
-import type { PDFDocumentProxy, PDFPageProxy } from 'pdfjs-dist/types/src/display/api';
+import type { PDFDocumentProxy, PDFPageProxy, TextContent } from 'pdfjs-dist/types/src/display/api';
 import { Skeleton } from './ui/skeleton';
+import 'pdfjs-dist/web/pdf_viewer.css';
 
 type PdfViewerProps = {
-    pdfDoc: { url: string } | null;
+    pdfUrl: string | null;
     scale: number;
 };
 
-const PageCanvas: React.FC<{ page: PDFPageProxy; scale: number }> = React.memo(({ page, scale }) => {
+const Page: React.FC<{ pagePromise: Promise<PDFPageProxy>; scale: number; pageIndex: number }> = React.memo(({ pagePromise, scale, pageIndex }) => {
     const canvasRef = useRef<HTMLCanvasElement>(null);
+    const textLayerRef = useRef<HTMLDivElement>(null);
+    const [page, setPage] = useState<PDFPageProxy | null>(null);
+    const [viewport, setViewport] = useState<pdfjsLib.PageViewport | null>(null);
 
     useEffect(() => {
-        const canvas = canvasRef.current;
-        if (!canvas) return;
+        pagePromise.then(setPage);
+    }, [pagePromise]);
 
-        const viewport = page.getViewport({ scale });
-        const context = canvas.getContext('2d');
-        if(!context) return;
-
-        canvas.height = viewport.height;
-        canvas.width = viewport.width;
-
-        const renderContext = {
-            canvasContext: context,
-            viewport: viewport,
-        };
-        const renderTask = page.render(renderContext);
-
-        return () => {
-            renderTask.cancel();
-        };
+    useEffect(() => {
+        if (page) {
+            setViewport(page.getViewport({ scale }));
+        }
     }, [page, scale]);
 
+    useEffect(() => {
+        const renderPage = async () => {
+            if (!page || !viewport || !canvasRef.current || !textLayerRef.current) return;
+
+            const canvas = canvasRef.current;
+            const context = canvas.getContext('2d');
+            if (!context) return;
+
+            canvas.height = viewport.height;
+            canvas.width = viewport.width;
+
+            const renderContext = {
+                canvasContext: context,
+                viewport: viewport,
+            };
+
+            await page.render(renderContext).promise;
+
+            const textContent = await page.getTextContent();
+            
+            textLayerRef.current.innerHTML = ''; // Clear previous text layer
+            pdfjsLib.renderTextLayer({
+                textContentSource: textContent,
+                container: textLayerRef.current,
+                viewport: viewport,
+                textDivs: [],
+            });
+        };
+        renderPage();
+    }, [page, viewport]);
+    
     return (
-        <div className="mx-auto mb-4 shadow-lg">
+        <div id={`page-${pageIndex}`} className="relative mx-auto mb-4 shadow-lg" style={{ width: viewport?.width, height: viewport?.height }}>
             <canvas ref={canvasRef} />
+            <div ref={textLayerRef} className="textLayer" />
         </div>
     );
 });
-PageCanvas.displayName = "PageCanvas";
+Page.displayName = "Page";
 
-const PdfViewer: React.FC<PdfViewerProps> = React.memo(({ pdfDoc, scale }) => {
-    const [pages, setPages] = useState<PDFPageProxy[]>([]);
+const PdfViewer: React.FC<PdfViewerProps> = React.memo(({ pdfUrl, scale }) => {
+    const [doc, setDoc] = useState<PDFDocumentProxy | null>(null);
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
-        if (!pdfDoc || !pdfDoc.url) {
-            setPages([]);
+        setDoc(null);
+        if (!pdfUrl) {
             setLoading(false);
             return;
         }
 
-        const fetchPages = async () => {
-            setLoading(true);
-            try {
-                const loadingTask = pdfjsLib.getDocument(pdfDoc.url);
-                const doc = await loadingTask.promise;
-                const allPages: PDFPageProxy[] = [];
-                for (let i = 1; i <= doc.numPages; i++) {
-                    const page = await doc.getPage(i);
-                    allPages.push(page);
-                }
-                setPages(allPages);
-            } catch (error) {
-                console.error("Error fetching pages", error);
-            } finally {
+        setLoading(true);
+        const loadingTask = pdfjsLib.getDocument(pdfUrl);
+        loadingTask.promise.then(
+            (pdfDoc) => {
+                setDoc(pdfDoc);
+                setLoading(false);
+            },
+            (reason) => {
+                console.error("Error loading PDF:", reason);
                 setLoading(false);
             }
-        };
+        );
 
-        fetchPages();
-    }, [pdfDoc]);
+        return () => {
+            loadingTask.destroy();
+        };
+    }, [pdfUrl]);
 
     if (loading) {
         return (
@@ -85,15 +106,20 @@ const PdfViewer: React.FC<PdfViewerProps> = React.memo(({ pdfDoc, scale }) => {
         );
     }
 
-    if(pages.length === 0){
+    if (!doc) {
         return null;
     }
 
     return (
         <div className="w-full h-full p-4 overflow-auto flex justify-center">
             <div>
-                {pages.map((page) => (
-                    <PageCanvas key={`page-${page.pageNumber}`} page={page} scale={scale} />
+                {Array.from({ length: doc.numPages }, (_, i) => (
+                    <Page 
+                        key={`page-${i}`}
+                        pagePromise={doc.getPage(i + 1)} 
+                        scale={scale}
+                        pageIndex={i}
+                    />
                 ))}
             </div>
         </div>

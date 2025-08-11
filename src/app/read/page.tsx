@@ -3,7 +3,7 @@
 
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import * as pdfjsLib from 'pdfjs-dist';
-import type { PDFDocumentProxy, TextItem as PdfTextItem } from 'pdfjs-dist/types/src/display/api';
+import type { PDFDocumentProxy, PDFPageProxy, TextItem as PdfTextItem, TextContent } from 'pdfjs-dist/types/src/display/api';
 import { UploadCloud, FileText, Loader2, LogOut, Save, Library, Download, Bot, Lightbulb, HelpCircle, Cloud, CloudOff, Settings, Menu, Home, BarChart, BookOpenCheck, BrainCircuit, Mic, FastForward, Rewind, Wind, Maximize, Minimize, ZoomIn, ZoomOut, Trash2, XCircle, MessageSquare } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import PdfViewer from '@/components/pdf-viewer';
@@ -17,7 +17,6 @@ import { summarizePdf, SummarizePdfOutput } from '@/ai/flows/summarize-pdf';
 import { chatWithPdf, ChatWithPdfOutput } from '@/ai/flows/chat-with-pdf';
 import { generateGlossary, GenerateGlossaryOutput, GlossaryItem } from '@/ai/flows/glossary-flow';
 import { generateQuiz, type GenerateQuizOutput } from '@/ai/flows/quiz-flow';
-import { cleanPdfText } from '@/ai/flows/clean-text-flow';
 import { Sidebar, SidebarHeader, SidebarMenu, SidebarMenuItem, SidebarMenuButton, SidebarFooter, SidebarContent } from '@/components/ui/sidebar';
 import { getDocuments, saveDocument, Document, getUserSession, ChatMessage, deleteDocument, clearChatHistory } from '@/lib/db';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -44,6 +43,14 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
 type PdfState = 'idle' | 'loading' | 'loaded' | 'error';
 type GenerationState = 'idle' | 'generating' | 'error';
 type ActiveDocument = Document;
+
+// This will hold the text content for each page for auto-scrolling
+interface PageTextContent {
+    pageIndex: number;
+    text: string;
+    startCharIndex: number;
+    endCharIndex: number;
+}
 
 // Helper function to concatenate audio blobs on the client-side
 async function mergeAudio(audioDataUris: string[]): Promise<Blob> {
@@ -77,6 +84,8 @@ export default function ReadPage() {
   const [isFullScreen, setIsFullScreen] = useState(false);
 
   const [documentText, setDocumentText] = useState('');
+  const [pdfPages, setPdfPages] = useState<PDFPageProxy[]>([]);
+  const [pageTextContents, setPageTextContents] = useState<PageTextContent[]>([]);
 
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [audioProgress, setAudioProgress] = useState(0);
@@ -119,7 +128,6 @@ export default function ReadPage() {
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const previewAudioRef = useRef<HTMLAudioElement | null>(null);
   const viewerContainerRef = useRef<HTMLDivElement>(null);
-  const controlsTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const localAudioUrlRef = useRef<string | null>(null); 
   const router = useRouter();
   const chatWindowRef = useRef<HTMLDivElement>(null);
@@ -175,29 +183,33 @@ export default function ReadPage() {
 
   }, [toast, fetchUserDocuments]);
 
-  const handleHideControls = () => {
-    if(controlsTimeoutRef.current) {
-        clearTimeout(controlsTimeoutRef.current);
-    }
-    setShowControls(true);
-    controlsTimeoutRef.current = setTimeout(() => {
-        setShowControls(false);
-    }, 3000);
-  }
 
   useEffect(() => {
+    // Hide controls when not interacting, only when a PDF is loaded
+    if (pdfState !== 'loaded' || isSpeaking) {
+        return;
+    }
+
+    let timeoutId: NodeJS.Timeout;
     const viewer = viewerContainerRef.current;
-    if(pdfState === 'loaded') {
-        handleHideControls();
-        viewer?.addEventListener('mousemove', handleHideControls);
-    }
+
+    const handleInteraction = () => {
+        setShowControls(true);
+        clearTimeout(timeoutId);
+        timeoutId = setTimeout(() => setShowControls(false), 3000);
+    };
+
+    viewer?.addEventListener('mousemove', handleInteraction);
+    viewer?.addEventListener('touchstart', handleInteraction);
+    
+    handleInteraction(); // Show controls initially
+
     return () => {
-        viewer?.removeEventListener('mousemove', handleHideControls);
-        if(controlsTimeoutRef.current) {
-            clearTimeout(controlsTimeoutRef.current);
-        }
-    }
-  }, [pdfState]);
+        clearTimeout(timeoutId);
+        viewer?.removeEventListener('mousemove', handleInteraction);
+        viewer?.removeEventListener('touchstart', handleInteraction);
+    };
+  }, [pdfState, isSpeaking]);
 
   const handleLogout = async () => {
     await fetch('/api/auth/logout', { method: 'POST' });
@@ -209,6 +221,7 @@ export default function ReadPage() {
     setDocumentText('');
     setPdfState('idle');
     setZoomLevel(1);
+    setPdfPages([]);
     setIsChatOpen(false);
     if (audioRef.current) {
         audioRef.current.src = "";
@@ -236,14 +249,29 @@ export default function ReadPage() {
         if (total) setLoadingProgress((loaded / total) * 100);
       };
       const pdf = await loadingTask.promise;
+      setPdfPages(Array.from({ length: pdf.numPages }, (_, i) => pdf.getPage(i + 1)) as any);
 
       let fullText = '';
+      let charIndex = 0;
+      const pageContents: PageTextContent[] = [];
+
       for (let i = 1; i <= pdf.numPages; i++) {
         const page = await pdf.getPage(i);
         const content = await page.getTextContent();
-        fullText += content.items.map(item => (item as PdfTextItem).str).join(' ');
+        const pageText = content.items.map(item => (item as PdfTextItem).str).join(' ');
+        
+        pageContents.push({
+            pageIndex: i - 1,
+            text: pageText,
+            startCharIndex: charIndex,
+            endCharIndex: charIndex + pageText.length,
+        });
+        
+        fullText += pageText + ' ';
+        charIndex += pageText.length + 1;
       }
       setDocumentText(fullText);
+      setPageTextContents(pageContents);
 
       if (source instanceof File) {
          const uploadResponse = await fetch('/api/upload', {
@@ -350,12 +378,25 @@ export default function ReadPage() {
             signal: signal,
         });
         
-        if (signal.aborted) throw new DOMException('Aborted', 'AbortError');
+        if (signal.aborted) {
+            // The fetch was aborted, so we just return.
+            // The 'finally' block will reset the state.
+            return;
+        }
+
         if (!response.ok) {
             const errorData = await response.json();
             throw new Error(errorData.error || 'Speech generation API failed');
         }
         const result = await response.json();
+
+        // If the flow was cancelled on the backend, it might return an empty array
+        if (!result.audioDataUris || result.audioDataUris.length === 0) {
+            if (!signal.aborted) {
+                toast({ title: "Generation Stopped", description: "Audio generation was stopped or resulted in no audio." });
+            }
+            return;
+        }
         
         const mergedAudioBlob = await mergeAudio(result.audioDataUris);
 
@@ -389,7 +430,7 @@ export default function ReadPage() {
 
       } catch (error: any) {
         if (error.name === 'AbortError') {
-          console.log("Audio generation was aborted.");
+          console.log("Audio generation was aborted by the user.");
         } else {
           console.error('Speech generation error', error);
           const errorMessage = error instanceof Error ? error.message : "An unknown error occurred";
@@ -425,10 +466,22 @@ export default function ReadPage() {
   }
 
   const handleAudioTimeUpdate = () => {
-      if (!audioRef.current) return;
-      setAudioCurrentTime(audioRef.current.currentTime);
+      if (!audioRef.current || !viewerContainerRef.current) return;
+      const currentTime = audioRef.current.currentTime;
+      setAudioCurrentTime(currentTime);
+
       if (audioDuration > 0) {
-          setAudioProgress((audioRef.current.currentTime / audioDuration) * 100);
+          setAudioProgress((currentTime / audioDuration) * 100);
+
+          const currentCharacter = Math.floor((documentText.length / audioDuration) * currentTime);
+          const currentPage = pageTextContents.find(p => currentCharacter >= p.startCharIndex && currentCharacter <= p.endCharIndex);
+          
+          if (currentPage) {
+              const pageElement = viewerContainerRef.current.querySelector(`#page-${currentPage.pageIndex}`);
+              if (pageElement) {
+                  pageElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+              }
+          }
       }
   }
 
@@ -718,11 +771,6 @@ export default function ReadPage() {
       }
   }
 
-  const pdfDocProp = useMemo(() => {
-    if (!activeDoc) return null;
-    return { url: activeDoc.pdfUrl };
-  }, [activeDoc]);
-
   const groupedVoices = useMemo(() => {
     return availableVoices.reduce((acc, voice) => {
         const provider = voice.provider;
@@ -992,7 +1040,7 @@ export default function ReadPage() {
                                     ) : (
                                         <Tooltip>
                                             <TooltipTrigger asChild>
-                                                <Button variant="ghost" size="icon" className="h-7 w-7" onClick={handleGenerateAudio} disabled={generationState === 'generating' || activeDoc?.id !== doc.id}>
+                                                <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleGenerateAudio()} disabled={generationState === 'generating' || activeDoc?.id !== doc.id}>
                                                     {generationState === 'generating' && activeDoc?.id === doc.id ? <XCircle className="h-4 w-4 text-destructive" /> : <Mic className="h-4 w-4" />}
                                                 </Button>
                                             </TooltipTrigger>
@@ -1050,9 +1098,9 @@ export default function ReadPage() {
             <main className="flex-1 flex items-center justify-center overflow-auto bg-muted/30">
               {pdfState !== 'loaded' && renderContent()}
               <div className={cn("w-full h-full relative", pdfState === 'loaded' ? 'flex items-center justify-center' : 'hidden')}>
-                  <PdfViewer 
-                      pdfDoc={pdfDocProp}
-                      scale={zoomLevel} 
+                  <PdfViewer
+                    pdfUrl={activeDoc?.pdfUrl || null}
+                    scale={zoomLevel}
                   />
               </div>
             </main>

@@ -8,35 +8,6 @@
 import 'dotenv/config';
 import { ai } from '@/ai/genkit';
 import { PreviewSpeechInputSchema, PreviewSpeechOutputSchema } from '@/ai/schemas';
-import { googleAI } from '@genkit-ai/googleai';
-import wav from 'wav';
-
-async function toWav(
-  pcmData: Buffer,
-  channels = 1,
-  rate = 24000,
-  sampleWidth = 2
-): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const writer = new wav.Writer({
-      channels,
-      sampleRate: rate,
-      bitDepth: sampleWidth * 8,
-    });
-
-    let bufs: any[] = [];
-    writer.on('error', reject);
-    writer.on('data', function (d) {
-      bufs.push(d);
-    });
-    writer.on('end', function () {
-      resolve(Buffer.concat(bufs).toString('base64'));
-    });
-
-    writer.write(pcmData);
-    writer.end();
-  });
-}
 
 async function handleOpenAIPreview(voice: string) {
     const { media } = await ai.generate({
@@ -56,25 +27,6 @@ async function handleOpenAIPreview(voice: string) {
     return `data:audio/mp3;base64,${Buffer.from(audioBuffer).toString('base64')}`;
 }
 
-async function handleGooglePreview(voice: string) {
-    const { media } = await ai.generate({
-        model: googleAI.model('gemini-2.5-flash-preview-tts'),
-        prompt: 'Hello! This is a preview of my voice.',
-        config: {
-            responseModalities: ['AUDIO'],
-            speechConfig: {
-                voiceConfig: { prebuiltVoiceConfig: { voiceName: voice } },
-            },
-        },
-    });
-
-    if (!media?.url) throw new Error('No media URL returned from Google.');
-    
-    const audioBuffer = Buffer.from(media.url.substring(media.url.indexOf(',') + 1), 'base64');
-    const wavBase64 = await toWav(audioBuffer);
-    return `data:audio/wav;base64,${wavBase64}`;
-}
-
 async function handleAmazonPreview(voice: string) {
     const pollyUrl = process.env.AMAZON_POLLY_API_URL;
     if (!pollyUrl) throw new Error('Amazon Polly API URL is not configured.');
@@ -88,7 +40,7 @@ async function handleAmazonPreview(voice: string) {
         }),
     });
 
-    if (!response.ok) throw new Error(`Failed to get audio from Amazon Polly: ${response.statusText}`);
+    if (!response.ok) throw new Error(`Failed to get audio from Amazon Polly: ${await response.text()}`);
     const { audio } = await response.json();
     if (!audio) throw new Error('Amazon Polly response did not include audio data.');
 
@@ -111,9 +63,6 @@ export const previewSpeech = ai.defineFlow(
         switch (provider) {
             case 'openai':
                 audioDataUri = await handleOpenAIPreview(voiceName);
-                break;
-            case 'google':
-                audioDataUri = await handleGooglePreview(voiceName);
                 break;
             case 'amazon':
                 audioDataUri = await handleAmazonPreview(voiceName);

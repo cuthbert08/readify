@@ -10,31 +10,8 @@
  */
 import 'dotenv/config';
 import { ai } from '@/ai/genkit';
-import { googleAI } from '@genkit-ai/googleai';
 import { GenerateSpeechInputSchema, GenerateSpeechOutputSchema } from '@/ai/schemas';
 import { formatTextForSpeech } from './format-text-for-speech';
-import wav from 'wav';
-
-async function toWav(
-  pcmData: Buffer,
-  channels = 1,
-  rate = 24000,
-  sampleWidth = 2
-): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const writer = new wav.Writer({
-      channels,
-      sampleRate: rate,
-      bitDepth: sampleWidth * 8,
-    });
-    let bufs: any[] = [];
-    writer.on('error', reject);
-    writer.on('data', (d) => bufs.push(d));
-    writer.on('end', () => resolve(Buffer.concat(bufs).toString('base64')));
-    writer.write(pcmData);
-    writer.end();
-  });
-}
 
 // Function to split text into chunks without breaking sentences
 function splitText(text: string, maxLength: number): string[] {
@@ -58,7 +35,7 @@ function splitText(text: string, maxLength: number): string[] {
             }
         }
 
-        if (lastSentenceEnd !== -1) {
+        if (lastSentenceEnd !== -1 && chunk.length > lastSentenceEnd) {
             chunk = remainingText.substring(0, lastSentenceEnd + 1);
         }
 
@@ -69,8 +46,9 @@ function splitText(text: string, maxLength: number): string[] {
     return chunks.filter(chunk => chunk.trim().length > 0);
 }
 
-async function generateOpenAI(textChunks: string[], voice: string, speed: number) {
+async function generateOpenAI(textChunks: string[], voice: string, speed: number, signal?: AbortSignal) {
     const audioGenerationPromises = textChunks.map(async (chunk) => {
+        if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
         const { media } = await ai.generate({
             model: 'openai/tts-1',
             prompt: chunk,
@@ -79,7 +57,7 @@ async function generateOpenAI(textChunks: string[], voice: string, speed: number
         });
         if (!media?.url) throw new Error('OpenAI failed to return audio.');
         
-        const audioResponse = await fetch(media.url);
+        const audioResponse = await fetch(media.url, { signal });
         if (!audioResponse.ok) throw new Error('Failed to fetch audio from OpenAI URL.');
         const audioBuffer = await audioResponse.arrayBuffer();
         return `data:audio/mp3;base64,${Buffer.from(audioBuffer).toString('base64')}`;
@@ -87,33 +65,12 @@ async function generateOpenAI(textChunks: string[], voice: string, speed: number
     return Promise.all(audioGenerationPromises);
 }
 
-async function generateGoogle(textChunks: string[], voice: string, speed: number) {
-    const audioGenerationPromises = textChunks.map(async (chunk) => {
-        const { media } = await ai.generate({
-            model: googleAI.model('gemini-2.5-flash-preview-tts'),
-            prompt: chunk,
-            config: {
-                responseModalities: ['AUDIO'],
-                speechConfig: {
-                    voiceConfig: { prebuiltVoiceConfig: { voiceName: voice } },
-                },
-                speakingRate: speed,
-            },
-        });
-        if (!media?.url) throw new Error('Google failed to return audio.');
-        
-        const audioBuffer = Buffer.from(media.url.substring(media.url.indexOf(',') + 1), 'base64');
-        const wavBase64 = await toWav(audioBuffer);
-        return `data:audio/wav;base64,${wavBase64}`;
-    });
-    return Promise.all(audioGenerationPromises);
-}
-
-async function generateAmazon(textChunks: string[], voice: string, speed: number) {
+async function generateAmazon(textChunks: string[], voice: string, signal?: AbortSignal) {
     const pollyUrl = process.env.AMAZON_POLLY_API_URL;
     if (!pollyUrl) throw new Error('Amazon Polly API URL is not configured.');
 
     const audioGenerationPromises = textChunks.map(async (chunk) => {
+        if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
         const response = await fetch(pollyUrl, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -121,8 +78,9 @@ async function generateAmazon(textChunks: string[], voice: string, speed: number
                 text: chunk,
                 voiceId: voice,
             }),
+            signal: signal,
         });
-        if (!response.ok) throw new Error(`Failed to get audio from Amazon Polly: ${response.statusText}`);
+        if (!response.ok) throw new Error(`Failed to get audio from Amazon Polly: ${await response.text()}`);
         const { audio } = await response.json();
         if (!audio) throw new Error('Amazon Polly response did not include audio data.');
         return `data:audio/mp3;base64,${audio}`;
@@ -136,19 +94,21 @@ export const generateSpeech = ai.defineFlow(
     inputSchema: GenerateSpeechInputSchema,
     outputSchema: GenerateSpeechOutputSchema,
   },
-  async (input) => {
+  async (input, {stream, onCancel}) => {
     
     if (!input.text || !input.text.trim()) {
         throw new Error("Input text cannot be empty.");
     }
     
+    const controller = new AbortController();
+    onCancel(() => controller.abort());
+
     try {
         console.log('--- Starting speech generation flow ---');
 
         const { formattedText } = await formatTextForSpeech({ rawText: input.text });
         
-        // Amazon Polly & Google have a limit of ~3000 chars. Let's use 2500 to be safe.
-        // OpenAI limits are higher, so this is a safe value for all.
+        // Let's use 2500 to be safe for all providers.
         const textChunks = splitText(formattedText, 2500);
         console.log(`Generated ${textChunks.length} text chunks.`);
         
@@ -158,16 +118,17 @@ export const generateSpeech = ai.defineFlow(
 
         switch (provider) {
             case 'openai':
-                audioDataUris = await generateOpenAI(textChunks, voiceName, speakingRate);
-                break;
-            case 'google':
-                audioDataUris = await generateGoogle(textChunks, voiceName, speakingRate);
+                audioDataUris = await generateOpenAI(textChunks, voiceName, speakingRate, controller.signal);
                 break;
             case 'amazon':
-                audioDataUris = await generateAmazon(textChunks, voiceName, speakingRate);
+                audioDataUris = await generateAmazon(textChunks, voiceName, controller.signal);
                 break;
             default:
                 throw new Error(`Unsupported voice provider: ${provider}`);
+        }
+
+        if (controller.signal.aborted) {
+            throw new DOMException('Flow was cancelled', 'AbortError');
         }
 
         if (audioDataUris.length === 0) {
@@ -177,6 +138,11 @@ export const generateSpeech = ai.defineFlow(
         return { audioDataUris };
 
     } catch (error: any) {
+        if (error.name === 'AbortError') {
+          console.log("GenerateSpeech flow was cancelled.");
+          // Return an empty array or handle as needed for cancellation.
+          return { audioDataUris: [] };
+        }
         console.error("Error in generateSpeech flow:", error);
         throw new Error(`Failed to generate speech: ${error.message}`);
     }
