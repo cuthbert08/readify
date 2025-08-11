@@ -29,12 +29,12 @@ const availableVoices: AvailableVoice[] = [
     { name: 'openai/nova', displayName: 'Nova', gender: 'Female', provider: 'openai' },
     { name: 'openai/shimmer', displayName: 'Shimmer', gender: 'Female', provider: 'openai' },
     // Google
-    { name: 'google/Algenib', displayName: 'Algenib', gender: 'Male', provider: 'google' },
-    { name: 'google/Antares', displayName: 'Antares', gender: 'Male', provider: 'google' },
-    { name: 'google/Arcturus', displayName: 'Arcturus', gender: 'Female', provider: 'google' },
-    { name: 'google/Capella', displayName: 'Capella', gender: 'Female', provider: 'google' },
-    { name: 'google/Sirius', displayName: 'Sirius', gender: 'Female', provider: 'google' },
-    { name: 'google/Vega', displayName: 'Vega', gender: 'Male', provider: 'google' },
+    { name: 'google/algenib', displayName: 'Algenib', gender: 'Male', provider: 'google' },
+    { name: 'google/puck', displayName: 'Puck', gender: 'Male', provider: 'google' },
+    { name: 'google/erimone', displayName: 'Erinome', gender: 'Female', provider: 'google' },
+    { name: 'google/callirrhoe', displayName: 'Callirrhoe', gender: 'Female', provider: 'google' },
+    { name: 'google/fenrir', displayName: 'Fenrir', gender: 'Female', provider: 'google' },
+    { name: 'google/gacrux', displayName: 'Gacrux', gender: 'Male', provider: 'google' },
     // Amazon Polly
     { name: 'amazon/Matthew', displayName: 'Matthew (US)', gender: 'Male', provider: 'amazon' },
     { name: 'amazon/Joanna', displayName: 'Joanna (US)', gender: 'Female', provider: 'amazon' },
