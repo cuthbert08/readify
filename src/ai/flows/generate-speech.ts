@@ -96,8 +96,8 @@ async function generateGoogle(textChunks: string[], voice: string, speed: number
                 responseModalities: ['AUDIO'],
                 speechConfig: {
                     voiceConfig: { prebuiltVoiceConfig: { voiceName: voice } },
-                    speakingRate: speed,
                 },
+                speakingRate: speed,
             },
         });
         if (!media?.url) throw new Error('Google failed to return audio.');
