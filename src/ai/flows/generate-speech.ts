@@ -147,8 +147,8 @@ export const generateSpeech = ai.defineFlow(
 
         const { formattedText } = await formatTextForSpeech({ rawText: input.text });
         
-        // Amazon Polly has a limit of ~3000 chars. Let's use 2500 to be safe.
-        // OpenAI and Google limits are higher, so this is a safe value for all.
+        // Amazon Polly & Google have a limit of ~3000 chars. Let's use 2500 to be safe.
+        // OpenAI limits are higher, so this is a safe value for all.
         const textChunks = splitText(formattedText, 2500);
         console.log(`Generated ${textChunks.length} text chunks.`);
         
