@@ -11,7 +11,7 @@ import {
 } from '@/components/ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
-import { Loader2 } from 'lucide-react';
+import { Loader2, Volume2 } from 'lucide-react';
 import type { SummarizePdfOutput } from '@/ai/flows/summarize-pdf';
 import type { GenerateGlossaryOutput } from '@/ai/flows/glossary-flow';
 import type { GenerateQuizOutput, QuizQuestion } from '@/ai/schemas/quiz';
@@ -36,6 +36,7 @@ type AiDialogProps = {
   quizOutput: GenerateQuizOutput | null;
   quizAttempt: QuizAttempt | null;
   onQuizSubmit: (questions: QuizQuestion[], answers: Record<number, string>) => void;
+  onPlayAudio: (text: string) => void;
 };
 
 const AiDialog: React.FC<AiDialogProps> = ({
@@ -48,6 +49,7 @@ const AiDialog: React.FC<AiDialogProps> = ({
   quizOutput,
   quizAttempt,
   onQuizSubmit,
+  onPlayAudio
 }) => {
 
   const renderLoading = (text: string) => (
@@ -72,7 +74,12 @@ const AiDialog: React.FC<AiDialogProps> = ({
         </TabsList>
         <ScrollArea className="h-96">
           <TabsContent value="summary" className="p-4">
-            <h3 className="text-lg font-semibold mb-2">Summary</h3>
+              <div className="flex justify-between items-center mb-2">
+                <h3 className="text-lg font-semibold">Summary</h3>
+                <Button variant="ghost" size="icon" onClick={() => onPlayAudio(summaryOutput?.summary || '')} disabled={!summaryOutput?.summary}>
+                    <Volume2 className="h-5 w-5" />
+                </Button>
+              </div>
             {isLoading ? renderLoading('Generating summary...') : (
               <p className="text-sm text-muted-foreground whitespace-pre-wrap">
                 {summaryOutput?.summary || 'No summary available.'}
@@ -80,7 +87,12 @@ const AiDialog: React.FC<AiDialogProps> = ({
             )}
           </TabsContent>
           <TabsContent value="key-points" className="p-4">
-            <h3 className="text-lg font-semibold mb-2">Key Points</h3>
+            <div className="flex justify-between items-center mb-2">
+                <h3 className="text-lg font-semibold">Key Points</h3>
+                <Button variant="ghost" size="icon" onClick={() => onPlayAudio(summaryOutput?.keyPoints?.join('. ') || '')} disabled={!summaryOutput?.keyPoints}>
+                    <Volume2 className="h-5 w-5" />
+                </Button>
+            </div>
             {isLoading ? renderLoading('Extracting key points...') : (
               <ul className="list-disc pl-5 space-y-2 text-sm text-muted-foreground">
                 {summaryOutput?.keyPoints?.map((point, index) => (
@@ -107,7 +119,12 @@ const AiDialog: React.FC<AiDialogProps> = ({
                         <AccordionItem value={`item-${index}`} key={index}>
                             <AccordionTrigger>{item.term}</AccordionTrigger>
                             <AccordionContent>
-                                {item.definition}
+                                <div className="flex justify-between items-start">
+                                    <p className="flex-1 pr-4">{item.definition}</p>
+                                    <Button variant="ghost" size="icon" onClick={() => onPlayAudio(item.definition)} disabled={!item.definition}>
+                                        <Volume2 className="h-5 w-5" />
+                                    </Button>
+                                </div>
                             </AccordionContent>
                         </AccordionItem>
                     ))}
@@ -150,7 +167,12 @@ const AiDialog: React.FC<AiDialogProps> = ({
         {questions.map((q, index) => (
           <Card key={index}>
             <CardHeader>
-              <CardTitle>Question {index + 1}</CardTitle>
+              <div className="flex justify-between items-center">
+                <CardTitle>Question {index + 1}</CardTitle>
+                 <Button variant="ghost" size="icon" onClick={() => onPlayAudio(q.question)} disabled={!q.question}>
+                    <Volume2 className="h-5 w-5" />
+                </Button>
+              </div>
             </CardHeader>
             <CardContent className="space-y-4">
               <p>{q.question}</p>
@@ -188,8 +210,15 @@ const AiDialog: React.FC<AiDialogProps> = ({
               )}
               {submitted && (
                  <div className={cn("p-4 rounded-md text-sm bg-muted prose dark:prose-invert max-w-none", getResultColor(index))}>
-                    <p className="font-bold">Correct Answer: {q.answer}</p>
-                    <ReactMarkdown>{q.explanation}</ReactMarkdown>
+                    <div className="flex justify-between items-start">
+                        <div className="flex-1 pr-4">
+                            <p className="font-bold">Correct Answer: {q.answer}</p>
+                            <ReactMarkdown>{q.explanation}</ReactMarkdown>
+                        </div>
+                         <Button variant="ghost" size="icon" onClick={() => onPlayAudio(`Correct answer: ${q.answer}. ${q.explanation}`)} disabled={!q.explanation}>
+                            <Volume2 className="h-5 w-5" />
+                        </Button>
+                    </div>
                  </div>
               )}
             </CardContent>
@@ -201,8 +230,15 @@ const AiDialog: React.FC<AiDialogProps> = ({
         {submitted && quizAttempt && (
             <Card>
                 <CardHeader>
-                    <CardTitle>Quiz Results & Suggestions</CardTitle>
-                    <CardDescription>Your Score: {quizAttempt.score.toFixed(0)}%</CardDescription>
+                     <div className="flex justify-between items-center">
+                        <div>
+                            <CardTitle>Quiz Results & Suggestions</CardTitle>
+                            <CardDescription>Your Score: {quizAttempt.score.toFixed(0)}%</CardDescription>
+                        </div>
+                        <Button variant="ghost" size="icon" onClick={() => onPlayAudio(quizAttempt.suggestions)} disabled={!quizAttempt.suggestions}>
+                            <Volume2 className="h-5 w-5" />
+                        </Button>
+                    </div>
                 </CardHeader>
                 <CardContent className="prose dark:prose-invert max-w-none">
                     <ReactMarkdown>{quizAttempt.suggestions}</ReactMarkdown>

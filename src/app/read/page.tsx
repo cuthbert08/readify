@@ -101,7 +101,7 @@ export default function ReadPage() {
   const [audioCurrentTime, setAudioCurrentTime] = useState(0);
 
   const [availableVoices, setAvailableVoices] = useState<AvailableVoice[]>([]);
-  const [selectedVoice, setSelectedVoice] = useState<string>('openai/alloy');
+  const [selectedVoice, setSelectedVoice] = useState('openai/alloy');
   const [speakingRate, setSpeakingRate] = useState(1);
   const [playbackRate, setPlaybackRate] = useState(1);
 
@@ -114,7 +114,6 @@ export default function ReadPage() {
   const [aiQuizOutput, setAiQuizOutput] = useState<GenerateQuizOutput | null>(null);
   const [aiGlossaryOutput, setAiGlossaryOutput] = useState<GenerateGlossaryOutput | null>(null);
 
-  const [showControls, setShowControls] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
   const [userEmail, setUserEmail] = useState('');
 
@@ -135,7 +134,7 @@ export default function ReadPage() {
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const previewAudioRef = useRef<HTMLAudioElement | null>(null);
   const viewerContainerRef = useRef<HTMLDivElement>(null);
-  const audioPlayerRef = useRef<HTMLDivElement>(null);
+  const audioPlayerRef = useRef<HTMLDivElement | null>(null);
   const localAudioUrlRef = useRef<string | null>(null); 
   const router = useRouter();
   const chatWindowRef = useRef<HTMLDivElement>(null);
@@ -338,8 +337,6 @@ export default function ReadPage() {
   
   const handleGenerateAudio = async () => {
       if (generationState === 'generating') {
-          // Cancellation is handled by Next.js server action lifecycle.
-          // We can't easily abort from the client, but if the component unmounts, it should cancel.
           toast({ title: "In Progress", description: "Audio generation is already running." });
           return;
       }
@@ -361,6 +358,7 @@ export default function ReadPage() {
         
         if (!result.audioDataUris || result.audioDataUris.length === 0) {
             toast({ title: "Generation Stopped", description: "Audio generation resulted in no audio." });
+            setGenerationState('idle');
             return;
         }
         
@@ -742,6 +740,15 @@ export default function ReadPage() {
             <Button onClick={() => fileInputRef.current?.click()}>Try another file</Button>
           </div>
         );
+      case 'loaded':
+        return (
+             <PdfViewer
+                pdfUrl={activeDoc?.pdfUrl || null}
+                scale={zoomLevel}
+                onLoadSuccess={handlePdfLoadSuccess}
+                numPages={numPages}
+              />
+        );
       case 'idle':
       default:
         return (
@@ -1039,22 +1046,12 @@ export default function ReadPage() {
         
         <div className="flex-1 flex flex-col relative" ref={viewerContainerRef}>
             <main className="flex-1 flex items-center justify-center overflow-auto bg-muted/30">
-              {(pdfState === 'idle' || pdfState === 'error') && renderContent()}
-              <div className={cn("w-full h-full relative", pdfState === 'loaded' ? 'flex items-center justify-center' : 'hidden')}>
-                  <PdfViewer
-                    pdfUrl={activeDoc?.pdfUrl || null}
-                    scale={zoomLevel}
-                    onLoadSuccess={handlePdfLoadSuccess}
-                    numPages={numPages}
-                  />
-              </div>
+              {renderContent()}
             </main>
-            {pdfState === 'loaded' && (
+            {(activeDoc?.audioUrl || generationState === 'generating') && (
                 <div 
                     ref={audioPlayerRef}
-                    onMouseEnter={() => setShowControls(true)}
-                    onMouseLeave={() => setShowControls(false)}
-                    className={cn("absolute inset-x-0 bottom-0 z-10 transition-opacity duration-300", showControls ? 'opacity-100' : 'opacity-0 pointer-events-none')}
+                    className="absolute inset-x-0 bottom-0 z-10"
                 >
                     <AudioPlayer
                         isSpeaking={isSpeaking}
@@ -1116,10 +1113,9 @@ export default function ReadPage() {
           quizOutput={aiQuizOutput}
           quizAttempt={activeDoc?.quizAttempt || null}
           onQuizSubmit={handleQuizSubmit}
+          onPlayAudio={handlePlayAiResponse}
         />
       </div>
     </TooltipProvider>
   );
 }
-
-    
