@@ -96,7 +96,7 @@ async function generateGoogle(textChunks: string[], voice: string, speed: number
                 responseModalities: ['AUDIO'],
                 speechConfig: {
                     voiceConfig: { prebuiltVoiceConfig: { voiceName: voice } },
-                    speed,
+                    speakingRate: speed,
                 },
             },
         });
