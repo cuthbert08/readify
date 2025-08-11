@@ -77,7 +77,9 @@ const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
 async function generateAmazon(textChunks: string[], voice: string, speed: number) {
     const pollyUrl = process.env.AMAZON_POLLY_API_URL;
-    if (!pollyUrl) throw new Error('Amazon Polly API URL is not configured.');
+    if (!pollyUrl) {
+        throw new Error('Amazon Polly API URL is not configured. Please set the AMAZON_POLLY_API_URL environment variable.');
+    }
 
     const audioUris: string[] = [];
 
