@@ -27,18 +27,26 @@ function splitText(text: string, maxLength: number): string[] {
         let chunk = remainingText.substring(0, maxLength);
         let lastSentenceEnd = -1;
 
+        // Prioritize splitting at sentence-ending punctuation.
         const sentenceEnders = ['.', '?', '!', '\n'];
         for (const p of sentenceEnders) {
             const pos = chunk.lastIndexOf(p);
-            if (pos > lastSentenceEnd) {
-                lastSentenceEnd = pos;
+            // Ensure the punctuation is not part of a larger structure like "e.g."
+            if (pos > -1 && (remainingText[pos + 1] === ' ' || remainingText[pos + 1] === '\n' || pos === chunk.length - 1)) {
+                lastSentenceEnd = Math.max(lastSentenceEnd, pos);
             }
         }
 
-        // If a sentence end is found, split there. Otherwise, split at maxLength.
-        const splitIndex = lastSentenceEnd !== -1 ? lastSentenceEnd + 1 : maxLength;
-        chunk = remainingText.substring(0, splitIndex);
+        // If a sentence end is found, split there. Otherwise, split at the last space to avoid breaking words.
+        let splitIndex;
+        if (lastSentenceEnd !== -1) {
+            splitIndex = lastSentenceEnd + 1;
+        } else {
+            const lastSpace = chunk.lastIndexOf(' ');
+            splitIndex = lastSpace !== -1 ? lastSpace : maxLength; // Fallback to hard split if no space
+        }
         
+        chunk = remainingText.substring(0, splitIndex);
         chunks.push(chunk);
         remainingText = remainingText.substring(chunk.length);
     }
@@ -102,7 +110,7 @@ async function generateAmazon(textChunks: string[], voice: string, speed: number
 
         // Add a small delay between requests to avoid rate limiting issues
         if (i < textChunks.length - 1) {
-            await sleep(50); 
+            await sleep(200); 
         }
     }
 
@@ -123,8 +131,8 @@ export async function generateSpeech(
 
         const { formattedText } = await formatTextForSpeech({ rawText: input.text });
         
-        // OpenAI recommends a 4096 char limit. Let's use 3000 to be safe.
-        const textChunks = splitText(formattedText, 3000);
+        // Use a safer character limit for Polly. OpenAI's is 4096.
+        const textChunks = splitText(formattedText, 2800);
         console.log(`Generated ${textChunks.length} text chunks.`);
         
         const [provider, voiceName] = input.voice.split('/');
