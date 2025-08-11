@@ -1,4 +1,3 @@
-
 // app/api/generate-speech/route.ts
 import { NextResponse } from 'next/server';
 import { generateSpeech } from '@/ai/flows/generate-speech';

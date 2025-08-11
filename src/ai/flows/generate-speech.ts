@@ -94,16 +94,14 @@ export const generateSpeech = ai.defineFlow(
     inputSchema: GenerateSpeechInputSchema,
     outputSchema: GenerateSpeechOutputSchema,
   },
-  async (input, { onCancel }) => {
+  async (input, { onCancel, signal }) => {
     
     if (!input.text || !input.text.trim()) {
         throw new Error("Input text cannot be empty.");
     }
     
-    const controller = new AbortController();
     onCancel(() => {
         console.log("GenerateSpeech flow is being cancelled.");
-        controller.abort()
     });
 
     try {
@@ -121,16 +119,16 @@ export const generateSpeech = ai.defineFlow(
 
         switch (provider) {
             case 'openai':
-                audioDataUris = await generateOpenAI(textChunks, voiceName, speakingRate, controller.signal);
+                audioDataUris = await generateOpenAI(textChunks, voiceName, speakingRate, signal);
                 break;
             case 'amazon':
-                audioDataUris = await generateAmazon(textChunks, voiceName, controller.signal);
+                audioDataUris = await generateAmazon(textChunks, voiceName, signal);
                 break;
             default:
                 throw new Error(`Unsupported voice provider: ${provider}`);
         }
 
-        if (controller.signal.aborted) {
+        if (signal.aborted) {
             throw new DOMException('Flow was cancelled', 'AbortError');
         }
 
