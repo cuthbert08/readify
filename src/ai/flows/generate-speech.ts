@@ -2,15 +2,39 @@
 'use server';
 
 /**
- * @fileOverview An text-to-speech AI agent using OpenAI.
+ * @fileOverview An text-to-speech AI agent using multiple providers.
  * This flow generates audio from text, supporting long inputs by splitting them into chunks.
  * It returns an array of audio data URIs to be concatenated on the client.
  *
  * - generateSpeech - A function that handles the text-to-speech process.
  */
+import 'dotenv/config';
 import { ai } from '@/ai/genkit';
+import { googleAI } from '@genkit-ai/googleai';
 import { GenerateSpeechInputSchema, GenerateSpeechOutputSchema } from '@/ai/schemas';
 import { formatTextForSpeech } from './format-text-for-speech';
+import wav from 'wav';
+
+async function toWav(
+  pcmData: Buffer,
+  channels = 1,
+  rate = 24000,
+  sampleWidth = 2
+): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const writer = new wav.Writer({
+      channels,
+      sampleRate: rate,
+      bitDepth: sampleWidth * 8,
+    });
+    let bufs: any[] = [];
+    writer.on('error', reject);
+    writer.on('data', (d) => bufs.push(d));
+    writer.on('end', () => resolve(Buffer.concat(bufs).toString('base64')));
+    writer.write(pcmData);
+    writer.end();
+  });
+}
 
 // Function to split text into chunks without breaking sentences
 function splitText(text: string, maxLength: number): string[] {
@@ -26,7 +50,6 @@ function splitText(text: string, maxLength: number): string[] {
         let chunk = remainingText.substring(0, maxLength);
         let lastSentenceEnd = -1;
 
-        // Find the last sentence-ending punctuation
         const sentenceEnders = ['.', '?', '!', '\n'];
         for (const p of sentenceEnders) {
             const pos = chunk.lastIndexOf(p);
@@ -36,7 +59,6 @@ function splitText(text: string, maxLength: number): string[] {
         }
 
         if (lastSentenceEnd !== -1) {
-            // Split at the end of the sentence
             chunk = remainingText.substring(0, lastSentenceEnd + 1);
         }
 
@@ -47,6 +69,67 @@ function splitText(text: string, maxLength: number): string[] {
     return chunks.filter(chunk => chunk.trim().length > 0);
 }
 
+async function generateOpenAI(textChunks: string[], voice: string, speed: number) {
+    const audioGenerationPromises = textChunks.map(async (chunk) => {
+        const { media } = await ai.generate({
+            model: 'openai/tts-1',
+            prompt: chunk,
+            config: { voice: voice as any, speed },
+            output: { format: 'url' }
+        });
+        if (!media?.url) throw new Error('OpenAI failed to return audio.');
+        
+        const audioResponse = await fetch(media.url);
+        if (!audioResponse.ok) throw new Error('Failed to fetch audio from OpenAI URL.');
+        const audioBuffer = await audioResponse.arrayBuffer();
+        return `data:audio/mp3;base64,${Buffer.from(audioBuffer).toString('base64')}`;
+    });
+    return Promise.all(audioGenerationPromises);
+}
+
+async function generateGoogle(textChunks: string[], voice: string, speed: number) {
+    const audioGenerationPromises = textChunks.map(async (chunk) => {
+        const { media } = await ai.generate({
+            model: googleAI.model('gemini-2.5-flash-preview-tts'),
+            prompt: chunk,
+            config: {
+                responseModalities: ['AUDIO'],
+                speechConfig: {
+                    voiceConfig: { prebuiltVoiceConfig: { voiceName: voice } },
+                    speed,
+                },
+            },
+        });
+        if (!media?.url) throw new Error('Google failed to return audio.');
+        
+        const audioBuffer = Buffer.from(media.url.substring(media.url.indexOf(',') + 1), 'base64');
+        const wavBase64 = await toWav(audioBuffer);
+        return `data:audio/wav;base64,${wavBase64}`;
+    });
+    return Promise.all(audioGenerationPromises);
+}
+
+async function generateAmazon(textChunks: string[], voice: string, speed: number) {
+    const pollyUrl = process.env.AMAZON_POLLY_API_URL;
+    if (!pollyUrl) throw new Error('Amazon Polly API URL is not configured.');
+
+    const audioGenerationPromises = textChunks.map(async (chunk) => {
+        const response = await fetch(pollyUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                text: chunk,
+                voiceId: voice,
+                // Note: Amazon Polly speed is controlled differently, often via SSML.
+                // We're omitting it here for simplicity.
+            }),
+        });
+        if (!response.ok) throw new Error('Failed to get audio from Amazon Polly.');
+        const { audioUrl } = await response.json();
+        return audioUrl;
+    });
+    return Promise.all(audioGenerationPromises);
+}
 
 export const generateSpeech = ai.defineFlow(
   {
@@ -59,50 +142,33 @@ export const generateSpeech = ai.defineFlow(
     if (!input.text || !input.text.trim()) {
         throw new Error("Input text cannot be empty.");
     }
-
-    console.log('--- Starting speech generation flow ---');
-
-    // Step 1: Format the text for better speech quality
-    console.log('Formatting text for speech...');
-    const { formattedText } = await formatTextForSpeech({ rawText: input.text });
-
-    const textChunks = splitText(formattedText, 4000);
-    const audioDataUris: string[] = [];
-
+    
     try {
-        console.log(`Generated ${textChunks.length} text chunks from formatted text.`);
+        console.log('--- Starting speech generation flow ---');
+
+        const { formattedText } = await formatTextForSpeech({ rawText: input.text });
         
-        // Generate audio for each chunk in parallel
-        const audioGenerationPromises = textChunks.map(async (chunk, index) => {
-            const { media } = await ai.generate({
-                model: 'openai/tts-1',
-                prompt: chunk,
-                config: {
-                    voice: input.voice,
-                    speed: input.speakingRate || 1.0,
-                },
-                output: { format: 'url' }
-            });
-
-            if (!media?.url) {
-                throw new Error(`OpenAI failed to return audio for chunk ${index}.`);
-            }
-            
-            // Instead of saving to a file, fetch and convert to a data URI directly
-            const audioResponse = await fetch(media.url);
-            if (!audioResponse.ok) {
-                throw new Error(`Failed to fetch audio from OpenAI URL for chunk ${index}. Status: ${audioResponse.status}`);
-            }
-            const audioBuffer = await audioResponse.arrayBuffer();
-            const base64Audio = Buffer.from(audioBuffer).toString('base64');
-            return `data:audio/mp3;base64,${base64Audio}`;
-        });
-
-        const generatedUris = await Promise.all(audioGenerationPromises);
-        audioDataUris.push(...generatedUris);
-
-        console.log(`Generated ${audioDataUris.length} audio data URIs.`);
+        const textChunks = splitText(formattedText, 4000);
+        console.log(`Generated ${textChunks.length} text chunks.`);
         
+        const [provider, voiceName] = input.voice.split('/');
+        const speakingRate = input.speakingRate || 1.0;
+        let audioDataUris: string[] = [];
+
+        switch (provider) {
+            case 'openai':
+                audioDataUris = await generateOpenAI(textChunks, voiceName, speakingRate);
+                break;
+            case 'google':
+                audioDataUris = await generateGoogle(textChunks, voiceName, speakingRate);
+                break;
+            case 'amazon':
+                audioDataUris = await generateAmazon(textChunks, voiceName, speakingRate);
+                break;
+            default:
+                throw new Error(`Unsupported voice provider: ${provider}`);
+        }
+
         if (audioDataUris.length === 0) {
             throw new Error("No audio was generated.");
         }

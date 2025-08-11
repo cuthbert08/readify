@@ -1,10 +1,9 @@
-import { z } from 'genkit';
 
-const validVoices = z.enum(['alloy', 'echo', 'fable', 'onyx', 'nova', 'shimmer']);
+import { z } from 'genkit';
 
 export const GenerateSpeechInputSchema = z.object({
   text: z.string().describe('The text to be converted to speech.'),
-  voice: validVoices.describe('The voice to use for the speech synthesis.'),
+  voice: z.string().describe('The identifier for the voice to use for the speech synthesis (e.g., "openai/alloy", "google/en-US-News-M").'),
   speakingRate: z.number().min(0.25).max(4.0).optional().describe('The speaking rate, where 1.0 is the normal speed.'),
 });
 export type GenerateSpeechInput = z.infer<typeof GenerateSpeechInputSchema>;
@@ -17,7 +16,7 @@ export type GenerateSpeechOutput = z.infer<typeof GenerateSpeechOutputSchema>;
 
 // Schema for previewing a selected voice
 export const PreviewSpeechInputSchema = z.object({
-    voice: validVoices.describe('The voice to use for the speech synthesis.'),
+    voice: z.string().describe('The voice identifier to preview (e.g., "openai/alloy", "google/en-US-News-M").'),
 });
 export type PreviewSpeechInput = z.infer<typeof PreviewSpeechInputSchema>;
 

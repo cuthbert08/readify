@@ -11,7 +11,7 @@ import AudioPlayer from '@/components/audio-player';
 import { useToast } from "@/hooks/use-toast";
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
-import { getAvailableVoices, AvailableVoicesOutput } from '@/ai/flows/voice-selection';
+import { getAvailableVoices, AvailableVoice } from '@/ai/flows/voice-selection';
 import { previewSpeech } from '@/ai/flows/preview-speech';
 import { summarizePdf, SummarizePdfOutput } from '@/ai/flows/summarize-pdf';
 import { chatWithPdf, ChatWithPdfOutput } from '@/ai/flows/chat-with-pdf';
@@ -25,7 +25,7 @@ import AiDialog, { AiDialogType } from '@/components/ai-dialog';
 import { Separator } from '@/components/ui/separator';
 import { cn } from '@/lib/utils';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue, SelectGroup } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
 import { Slider } from '@/components/ui/slider';
 import { Volume2 } from 'lucide-react';
@@ -83,8 +83,8 @@ export default function ReadPage() {
   const [audioDuration, setAudioDuration] = useState(0);
   const [audioCurrentTime, setAudioCurrentTime] = useState(0);
 
-  const [availableVoices, setAvailableVoices] = useState<AvailableVoicesOutput>([]);
-  const [selectedVoice, setSelectedVoice] = useState<string>('alloy');
+  const [availableVoices, setAvailableVoices] = useState<AvailableVoice[]>([]);
+  const [selectedVoice, setSelectedVoice] = useState<string>('openai/alloy');
   const [speakingRate, setSpeakingRate] = useState(1);
   const [playbackRate, setPlaybackRate] = useState(1);
 
@@ -106,7 +106,7 @@ export default function ReadPage() {
   const generationAbortController = useRef<AbortController | null>(null);
 
   const [synthesisText, setSynthesisText] = useState('');
-  const [synthesisVoice, setSynthesisVoice] = useState('alloy');
+  const [synthesisVoice, setSynthesisVoice] = useState('openai/alloy');
   const [synthesisRate, setSynthesisRate] = useState(1.0);
   const [isSynthesizing, setIsSynthesizing] = useState(false);
   const [synthesisAudioUrl, setSynthesisAudioUrl] = useState<string | null>(null);
@@ -351,7 +351,10 @@ export default function ReadPage() {
         });
         
         if (signal.aborted) throw new DOMException('Aborted', 'AbortError');
-        if (!response.ok) throw new Error('Speech generation API failed');
+        if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.error || 'Speech generation API failed');
+        }
         const result = await response.json();
         
         const mergedAudioBlob = await mergeAudio(result.audioDataUris);
@@ -431,7 +434,7 @@ export default function ReadPage() {
 
   const handlePreviewVoice = async (voice: string) => {
     try {
-      const result = await previewSpeech({ voice: voice as any });
+      const result = await previewSpeech({ voice: voice });
       if (result.audioDataUri && previewAudioRef.current) {
         previewAudioRef.current.src = result.audioDataUri;
         previewAudioRef.current.play();
@@ -720,6 +723,17 @@ export default function ReadPage() {
     return { url: activeDoc.pdfUrl };
   }, [activeDoc]);
 
+  const groupedVoices = useMemo(() => {
+    return availableVoices.reduce((acc, voice) => {
+        const provider = voice.provider;
+        if (!acc[provider]) {
+            acc[provider] = [];
+        }
+        acc[provider].push(voice);
+        return acc;
+    }, {} as Record<string, AvailableVoice[]>);
+  }, [availableVoices]);
+
   const renderContent = () => {
     switch (pdfState) {
       case 'loading':
@@ -787,25 +801,30 @@ export default function ReadPage() {
                                           <SelectValue placeholder="Select a voice" />
                                       </SelectTrigger>
                                       <SelectContent>
-                                          {availableVoices.map((voice) => (
-                                          <div key={voice.name} className="flex items-center justify-between pr-2">
-                                              <SelectItem value={voice.name} className="flex-1">
-                                                  {voice.displayName} ({voice.gender})
-                                              </SelectItem>
-                                              <Button 
-                                                  variant="ghost" 
-                                                  size="icon" 
-                                                  className="h-7 w-7 ml-2 shrink-0"
-                                                  onClick={(e) => {
-                                                      e.stopPropagation();
-                                                      handlePreviewVoice(voice.name);
-                                                  }}
-                                                  aria-label={`Preview voice ${voice.name}`}
-                                              >
-                                                  <Volume2 className="h-4 w-4" />
-                                              </Button>
-                                          </div>
-                                          ))}
+                                        {Object.entries(groupedVoices).map(([provider, voices]) => (
+                                            <SelectGroup key={provider}>
+                                                <Label className="px-2 py-1.5 text-xs font-semibold text-muted-foreground">{provider.toUpperCase()}</Label>
+                                                {voices.map((voice) => (
+                                                    <div key={voice.name} className="flex items-center justify-between pr-2">
+                                                        <SelectItem value={voice.name} className="flex-1">
+                                                            {voice.displayName} ({voice.gender})
+                                                        </SelectItem>
+                                                        <Button 
+                                                            variant="ghost" 
+                                                            size="icon" 
+                                                            className="h-7 w-7 ml-2 shrink-0"
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                handlePreviewVoice(voice.name);
+                                                            }}
+                                                            aria-label={`Preview voice ${voice.name}`}
+                                                        >
+                                                            <Volume2 className="h-4 w-4" />
+                                                        </Button>
+                                                    </div>
+                                                ))}
+                                            </SelectGroup>
+                                        ))}
                                       </SelectContent>
                                   </Select>
                               </div>
@@ -872,31 +891,33 @@ export default function ReadPage() {
                               <Label>Voice</Label>
                               <Select value={selectedVoice} onValueChange={setSelectedVoice} disabled={isSpeaking || generationState === 'generating'}>
                                   <SelectTrigger>
-                                      <SelectValue>
-                                      {availableVoices.find(v => v.name === selectedVoice)?.displayName || selectedVoice}
-                                      ({availableVoices.find(v => v.name === selectedVoice)?.gender})
-                                      </SelectValue>
+                                      <SelectValue placeholder="Select a voice"/>
                                   </SelectTrigger>
                                   <SelectContent>
-                                      {availableVoices.map((voice) => (
-                                      <div key={voice.name} className="flex items-center justify-between pr-2">
-                                          <SelectItem value={voice.name} className="flex-1">
-                                              {voice.displayName} ({voice.gender})
-                                          </SelectItem>
-                                          <Button 
-                                              variant="ghost" 
-                                              size="icon" 
-                                              className="h-7 w-7 ml-2 shrink-0"
-                                              onClick={(e) => {
-                                                  e.stopPropagation();
-                                                  handlePreviewVoice(voice.name);
-                                              }}
-                                              aria-label={`Preview voice ${voice.name}`}
-                                          >
-                                              <Volume2 className="h-4 w-4" />
-                                          </Button>
-                                      </div>
-                                      ))}
+                                    {Object.entries(groupedVoices).map(([provider, voices]) => (
+                                        <SelectGroup key={provider}>
+                                            <Label className="px-2 py-1.5 text-xs font-semibold text-muted-foreground">{provider.toUpperCase()}</Label>
+                                            {voices.map((voice) => (
+                                            <div key={voice.name} className="flex items-center justify-between pr-2">
+                                                <SelectItem value={voice.name} className="flex-1">
+                                                    {voice.displayName} ({voice.gender})
+                                                </SelectItem>
+                                                <Button 
+                                                    variant="ghost" 
+                                                    size="icon" 
+                                                    className="h-7 w-7 ml-2 shrink-0"
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        handlePreviewVoice(voice.name);
+                                                    }}
+                                                    aria-label={`Preview voice ${voice.name}`}
+                                                >
+                                                    <Volume2 className="h-4 w-4" />
+                                                </Button>
+                                            </div>
+                                            ))}
+                                        </SelectGroup>
+                                    ))}
                                   </SelectContent>
                               </Select>
                           </div>
