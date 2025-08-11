@@ -70,6 +70,11 @@ const Page: React.FC<{ pagePromise: Promise<PDFPageProxy>; scale: number; pageIn
 });
 Page.displayName = "Page";
 
+interface PdfViewerProps {
+    pdfUrl: string | null;
+    scale: number;
+}
+
 const PdfViewer: React.FC<PdfViewerProps> = React.memo(({ pdfUrl, scale }) => {
     const [doc, setDoc] = useState<PDFDocumentProxy | null>(null);
     const [loading, setLoading] = useState(true);
