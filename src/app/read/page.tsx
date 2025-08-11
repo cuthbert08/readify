@@ -2,8 +2,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import * as pdfjsLib from 'pdfjs-dist';
-import type { PDFDocumentProxy, PDFPageProxy, TextItem as PdfTextItem, TextContent } from 'pdfjs-dist/types/src/display/api';
+import type { PDFDocumentProxy } from 'pdfjs-dist/types/src/display/api';
 import { UploadCloud, FileText, Loader2, LogOut, Save, Library, Download, Bot, Lightbulb, HelpCircle, Cloud, CloudOff, Settings, Menu, Home, BarChart, BookOpenCheck, BrainCircuit, Mic, FastForward, Rewind, Wind, Maximize, Minimize, ZoomIn, ZoomOut, Trash2, XCircle, MessageSquare } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import PdfViewer from '@/components/pdf-viewer';
@@ -34,11 +33,8 @@ import { Card } from '@/components/ui/card';
 import { ThemeToggle } from '@/components/theme-toggle';
 import { ChatWindow } from '@/components/chat-window';
 import { generateQuizFeedback } from '@/ai/flows/quiz-feedback-flow';
+import { cleanPdfText } from '@/ai/flows/clean-text-flow';
 
-pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
-  'pdfjs-dist/build/pdf.worker.min.mjs',
-  import.meta.url,
-).toString();
 
 type PdfState = 'idle' | 'loading' | 'loaded' | 'error';
 type GenerationState = 'idle' | 'generating' | 'error';
@@ -77,6 +73,7 @@ async function mergeAudio(audioDataUris: string[]): Promise<Blob> {
 export default function ReadPage() {
   const [pdfState, setPdfState] = useState<PdfState>('idle');
   const [activeDoc, setActiveDoc] = useState<ActiveDocument | null>(null);
+  const [numPages, setNumPages] = useState<number | null>(null);
 
   const [loadingProgress, setLoadingProgress] = useState(0);
   const [zoomLevel, setZoomLevel] = useState(1);
@@ -84,7 +81,6 @@ export default function ReadPage() {
   const [isFullScreen, setIsFullScreen] = useState(false);
 
   const [documentText, setDocumentText] = useState('');
-  const [pdfPages, setPdfPages] = useState<PDFPageProxy[]>([]);
   const [pageTextContents, setPageTextContents] = useState<PageTextContent[]>([]);
 
   const [isSpeaking, setIsSpeaking] = useState(false);
@@ -184,33 +180,6 @@ export default function ReadPage() {
   }, [toast, fetchUserDocuments]);
 
 
-  useEffect(() => {
-    // Hide controls when not interacting, only when a PDF is loaded
-    if (pdfState !== 'loaded' || isSpeaking) {
-        return;
-    }
-
-    let timeoutId: NodeJS.Timeout;
-    const viewer = viewerContainerRef.current;
-
-    const handleInteraction = () => {
-        setShowControls(true);
-        clearTimeout(timeoutId);
-        timeoutId = setTimeout(() => setShowControls(false), 3000);
-    };
-
-    viewer?.addEventListener('mousemove', handleInteraction);
-    viewer?.addEventListener('touchstart', handleInteraction);
-    
-    handleInteraction(); // Show controls initially
-
-    return () => {
-        clearTimeout(timeoutId);
-        viewer?.removeEventListener('mousemove', handleInteraction);
-        viewer?.removeEventListener('touchstart', handleInteraction);
-    };
-  }, [pdfState, isSpeaking]);
-
   const handleLogout = async () => {
     await fetch('/api/auth/logout', { method: 'POST' });
     router.push('/');
@@ -221,7 +190,8 @@ export default function ReadPage() {
     setDocumentText('');
     setPdfState('idle');
     setZoomLevel(1);
-    setPdfPages([]);
+    setNumPages(null);
+    setPageTextContents([]);
     setIsChatOpen(false);
     if (audioRef.current) {
         audioRef.current.src = "";
@@ -235,30 +205,17 @@ export default function ReadPage() {
     setAudioProgress(0);
   }
 
-  const loadPdf = useCallback(async (source: File | string, existingDoc: Document | null) => {
-    clearActiveDoc();
-    setPdfState('loading');
-    setLoadingProgress(0);
-    setAiSummaryOutput(null);
-    setAiQuizOutput(null);
-    setAiGlossaryOutput(null);
-    
-    try {
-      const loadingTask = pdfjsLib.getDocument(typeof source === 'string' ? { url: source } : { data: await source.arrayBuffer() });
-      loadingTask.onProgress = ({ loaded, total }: { loaded: number; total: number }) => {
-        if (total) setLoadingProgress((loaded / total) * 100);
-      };
-      const pdf = await loadingTask.promise;
-      setPdfPages(Array.from({ length: pdf.numPages }, (_, i) => pdf.getPage(i + 1)) as any);
+  const handlePdfLoadSuccess = async (pdf: PDFDocumentProxy) => {
+    setNumPages(pdf.numPages);
 
-      let fullText = '';
-      let charIndex = 0;
-      const pageContents: PageTextContent[] = [];
+    let fullText = '';
+    let charIndex = 0;
+    const pageContents: PageTextContent[] = [];
 
-      for (let i = 1; i <= pdf.numPages; i++) {
+    for (let i = 1; i <= pdf.numPages; i++) {
         const page = await pdf.getPage(i);
         const content = await page.getTextContent();
-        const pageText = content.items.map(item => (item as PdfTextItem).str).join(' ');
+        const pageText = content.items.map(item => (item as any).str).join(' ');
         
         pageContents.push({
             pageIndex: i - 1,
@@ -269,36 +226,47 @@ export default function ReadPage() {
         
         fullText += pageText + ' ';
         charIndex += pageText.length + 1;
-      }
-      setDocumentText(fullText);
-      setPageTextContents(pageContents);
+    }
+    
+    const { cleanedText } = await cleanPdfText({ rawText: fullText });
+    
+    setDocumentText(cleanedText);
+    setPageTextContents(pageContents);
+    setPdfState('loaded');
+  }
 
-      if (source instanceof File) {
-         const uploadResponse = await fetch('/api/upload', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/pdf', 'x-vercel-filename': source.name },
-            body: source,
-        });
-        if (!uploadResponse.ok) throw new Error('PDF Upload failed');
-        const pdfBlob = await uploadResponse.json();
-        
-        const savedDoc = await saveDocument({
-            fileName: source.name,
-            pdfUrl: pdfBlob.url,
-        });
-        setActiveDoc(savedDoc);
-        fetchUserDocuments();
-      } else if (existingDoc) {
-        setActiveDoc(existingDoc);
-        setZoomLevel(existingDoc.zoomLevel || 1);
-         if (existingDoc.audioUrl && audioRef.current) {
-            audioRef.current.src = existingDoc.audioUrl;
-            audioRef.current.load();
+  const loadPdf = useCallback(async (source: File, existingDoc: Document | null) => {
+    clearActiveDoc();
+    setPdfState('loading');
+    setLoadingProgress(0);
+    setAiSummaryOutput(null);
+    setAiQuizOutput(null);
+    setAiGlossaryOutput(null);
+    
+    try {
+        if (!existingDoc) {
+             const uploadResponse = await fetch('/api/upload', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/pdf', 'x-vercel-filename': source.name },
+                body: source,
+            });
+            if (!uploadResponse.ok) throw new Error('PDF Upload failed');
+            const pdfBlob = await uploadResponse.json();
+            
+            const savedDoc = await saveDocument({
+                fileName: source.name,
+                pdfUrl: pdfBlob.url,
+            });
+            setActiveDoc(savedDoc);
+            fetchUserDocuments();
+        } else {
+             setActiveDoc(existingDoc);
+             setZoomLevel(existingDoc.zoomLevel || 1);
+             if (existingDoc.audioUrl && audioRef.current) {
+                audioRef.current.src = existingDoc.audioUrl;
+                audioRef.current.load();
+            }
         }
-      }
-
-      setPdfState('loaded');
-
     } catch (error) {
       console.error('Failed to load PDF:', error);
       setPdfState('error');
@@ -329,7 +297,17 @@ export default function ReadPage() {
   };
   
   const handleSelectDocument = async (doc: Document) => {
-    await loadPdf(doc.pdfUrl, doc);
+    clearActiveDoc();
+    setActiveDoc(doc);
+    setPdfState('loading');
+    setAiSummaryOutput(null);
+    setAiQuizOutput(null);
+    setAiGlossaryOutput(null);
+    setZoomLevel(doc.zoomLevel || 1);
+    if (doc.audioUrl && audioRef.current) {
+        audioRef.current.src = doc.audioUrl;
+        audioRef.current.load();
+    }
   }
 
   const handlePlayPause = async () => {
@@ -379,8 +357,6 @@ export default function ReadPage() {
         });
         
         if (signal.aborted) {
-            // The fetch was aborted, so we just return.
-            // The 'finally' block will reset the state.
             return;
         }
 
@@ -390,7 +366,6 @@ export default function ReadPage() {
         }
         const result = await response.json();
 
-        // If the flow was cancelled on the backend, it might return an empty array
         if (!result.audioDataUris || result.audioDataUris.length === 0) {
             if (!signal.aborted) {
                 toast({ title: "Generation Stopped", description: "Audio generation was stopped or resulted in no audio." });
@@ -409,6 +384,7 @@ export default function ReadPage() {
                 'x-doc-id': activeDoc.id,
             },
             body: mergedAudioBlob,
+            signal: signal,
         });
         if (!uploadAudioResponse.ok) throw new Error('Audio Upload failed');
         const audioBlobResult = await uploadAudioResponse.json();
@@ -788,8 +764,8 @@ export default function ReadPage() {
         return (
           <div className="flex flex-col items-center justify-center h-full text-center space-y-4">
             <Loader2 className="w-16 h-16 text-primary animate-spin" />
-            <p className="text-lg font-medium">Loading PDF...</p>
-            <Progress value={loadingProgress} className="w-full max-w-md" />
+            <p className="text-lg font-medium">Preparing Document...</p>
+            {activeDoc && <PdfViewer pdfUrl={activeDoc.pdfUrl} scale={zoomLevel} onLoadSuccess={handlePdfLoadSuccess} numPages={numPages} />}
           </div>
         );
       case 'error':
@@ -1096,11 +1072,13 @@ export default function ReadPage() {
         
         <div className="flex-1 flex flex-col relative" ref={viewerContainerRef}>
             <main className="flex-1 flex items-center justify-center overflow-auto bg-muted/30">
-              {pdfState !== 'loaded' && renderContent()}
+              {(pdfState === 'idle' || pdfState === 'error') && renderContent()}
               <div className={cn("w-full h-full relative", pdfState === 'loaded' ? 'flex items-center justify-center' : 'hidden')}>
                   <PdfViewer
                     pdfUrl={activeDoc?.pdfUrl || null}
                     scale={zoomLevel}
+                    onLoadSuccess={handlePdfLoadSuccess}
+                    numPages={numPages}
                   />
               </div>
             </main>
