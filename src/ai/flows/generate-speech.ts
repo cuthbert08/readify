@@ -89,7 +89,8 @@ async function generateAmazon(textChunks: string[], voice: string, speed: number
         });
 
         if (!response.ok) {
-            throw new Error(`Failed to get audio from Amazon Polly: ${await response.text()}`);
+            const errorBody = await response.text();
+            throw new Error(`Failed to get audio from Amazon Polly: ${errorBody}`);
         }
 
         const { audio } = await response.json();
