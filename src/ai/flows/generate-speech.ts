@@ -10,7 +10,7 @@
  */
 import 'dotenv/config';
 import { ai } from '@/ai/genkit';
-import { GenerateSpeechInputSchema, GenerateSpeechOutputSchema } from '@/ai/schemas';
+import { GenerateSpeechInputSchema, GenerateSpeechOutputSchema, GenerateSpeechInput } from '@/ai/schemas';
 import { formatTextForSpeech } from './format-text-for-speech';
 
 // Function to split text into chunks without breaking sentences
@@ -35,10 +35,10 @@ function splitText(text: string, maxLength: number): string[] {
             }
         }
 
-        if (lastSentenceEnd !== -1 && chunk.length > lastSentenceEnd) {
-            chunk = remainingText.substring(0, lastSentenceEnd + 1);
-        }
-
+        // If a sentence end is found, split there. Otherwise, split at maxLength.
+        const splitIndex = lastSentenceEnd !== -1 ? lastSentenceEnd + 1 : maxLength;
+        chunk = remainingText.substring(0, splitIndex);
+        
         chunks.push(chunk);
         remainingText = remainingText.substring(chunk.length);
     }
@@ -46,9 +46,8 @@ function splitText(text: string, maxLength: number): string[] {
     return chunks.filter(chunk => chunk.trim().length > 0);
 }
 
-async function generateOpenAI(textChunks: string[], voice: string, speed: number, signal?: AbortSignal) {
+async function generateOpenAI(textChunks: string[], voice: string, speed: number) {
     const audioGenerationPromises = textChunks.map(async (chunk) => {
-        if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
         const { media } = await ai.generate({
             model: 'openai/tts-1',
             prompt: chunk,
@@ -57,7 +56,7 @@ async function generateOpenAI(textChunks: string[], voice: string, speed: number
         });
         if (!media?.url) throw new Error('OpenAI failed to return audio.');
         
-        const audioResponse = await fetch(media.url, { signal });
+        const audioResponse = await fetch(media.url);
         if (!audioResponse.ok) throw new Error('Failed to fetch audio from OpenAI URL.');
         const audioBuffer = await audioResponse.arrayBuffer();
         return `data:audio/mp3;base64,${Buffer.from(audioBuffer).toString('base64')}`;
@@ -65,12 +64,11 @@ async function generateOpenAI(textChunks: string[], voice: string, speed: number
     return Promise.all(audioGenerationPromises);
 }
 
-async function generateAmazon(textChunks: string[], voice: string, signal?: AbortSignal) {
+async function generateAmazon(textChunks: string[], voice: string) {
     const pollyUrl = process.env.AMAZON_POLLY_API_URL;
     if (!pollyUrl) throw new Error('Amazon Polly API URL is not configured.');
 
     const audioGenerationPromises = textChunks.map(async (chunk) => {
-        if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
         const response = await fetch(pollyUrl, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -78,7 +76,6 @@ async function generateAmazon(textChunks: string[], voice: string, signal?: Abor
                 text: chunk,
                 voiceId: voice,
             }),
-            signal: signal,
         });
         if (!response.ok) throw new Error(`Failed to get audio from Amazon Polly: ${await response.text()}`);
         const { audio } = await response.json();
@@ -88,29 +85,22 @@ async function generateAmazon(textChunks: string[], voice: string, signal?: Abor
     return Promise.all(audioGenerationPromises);
 }
 
-export const generateSpeech = ai.defineFlow(
-  {
-    name: 'generateSpeech',
-    inputSchema: GenerateSpeechInputSchema,
-    outputSchema: GenerateSpeechOutputSchema,
-  },
-  async (input, { onCancel, signal }) => {
+// This function can be directly called from client components as a Server Action.
+export async function generateSpeech(
+  input: GenerateSpeechInput
+): Promise<GenerateSpeechOutputSchema> {
     
     if (!input.text || !input.text.trim()) {
         throw new Error("Input text cannot be empty.");
     }
-    
-    onCancel(() => {
-        console.log("GenerateSpeech flow is being cancelled.");
-    });
 
     try {
-        console.log('--- Starting speech generation flow ---');
+        console.log('--- Starting speech generation ---');
 
         const { formattedText } = await formatTextForSpeech({ rawText: input.text });
         
-        // Let's use 2500 to be safe for all providers.
-        const textChunks = splitText(formattedText, 2500);
+        // OpenAI recommends a 4096 char limit. Let's use 3000 to be safe.
+        const textChunks = splitText(formattedText, 3000);
         console.log(`Generated ${textChunks.length} text chunks.`);
         
         const [provider, voiceName] = input.voice.split('/');
@@ -119,17 +109,13 @@ export const generateSpeech = ai.defineFlow(
 
         switch (provider) {
             case 'openai':
-                audioDataUris = await generateOpenAI(textChunks, voiceName, speakingRate, signal);
+                audioDataUris = await generateOpenAI(textChunks, voiceName, speakingRate);
                 break;
             case 'amazon':
-                audioDataUris = await generateAmazon(textChunks, voiceName, signal);
+                audioDataUris = await generateAmazon(textChunks, voiceName);
                 break;
             default:
                 throw new Error(`Unsupported voice provider: ${provider}`);
-        }
-
-        if (signal.aborted) {
-            throw new DOMException('Flow was cancelled', 'AbortError');
         }
 
         if (audioDataUris.length === 0) {
@@ -139,13 +125,8 @@ export const generateSpeech = ai.defineFlow(
         return { audioDataUris };
 
     } catch (error: any) {
-        if (error.name === 'AbortError') {
-          console.log("GenerateSpeech flow was cancelled.");
-          // Return an empty array or handle as needed for cancellation.
-          return { audioDataUris: [] };
-        }
-        console.error("Error in generateSpeech flow:", error);
+        console.error("Error in generateSpeech action:", error);
+        // Re-throw the error so the client can catch it.
         throw new Error(`Failed to generate speech: ${error.message}`);
     }
-  }
-);
+}

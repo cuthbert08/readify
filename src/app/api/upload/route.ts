@@ -5,8 +5,9 @@ import { randomUUID } from 'crypto';
 
 export async function POST(request: NextRequest) {
   const session = await getSession();
-  if (!session?.userId || !session.username) {
-    return NextResponse.json({ message: 'Unauthorized or username not set' }, { status: 401 });
+  // Allow uploads even if username is not set yet (e.g., during initial document processing)
+  if (!session?.userId) {
+    return NextResponse.json({ message: 'Unauthorized' }, { status: 401 });
   }
 
   const originalFilename = request.headers.get('x-vercel-filename');
@@ -24,9 +25,10 @@ export async function POST(request: NextRequest) {
     );
   }
   
-  // Use the new path structure: readify/[username]/[docId]-[originalFilename]
+  // Use a unique identifier for the user folder, which is the userId.
+  const userIdentifier = session.userId;
   const docId = request.headers.get('x-doc-id') || randomUUID();
-  const blobName = `readify/${session.username}/${docId}-${originalFilename}`;
+  const blobName = `readify/${userIdentifier}/${docId}-${originalFilename}`;
 
   try {
     const blob = await put(blobName, request.body, {

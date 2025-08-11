@@ -8,7 +8,6 @@ import { useRouter } from 'next/navigation';
 import AudioPlayer from '@/components/audio-player';
 import { useToast } from "@/hooks/use-toast";
 import { Button } from '@/components/ui/button';
-import { Progress } from '@/components/ui/progress';
 import { getAvailableVoices, AvailableVoice } from '@/ai/flows/voice-selection';
 import { previewSpeech } from '@/ai/flows/preview-speech';
 import { summarizePdf, SummarizePdfOutput } from '@/ai/flows/summarize-pdf';
@@ -33,6 +32,7 @@ import { ThemeToggle } from '@/components/theme-toggle';
 import { ChatWindow } from '@/components/chat-window';
 import { generateQuizFeedback } from '@/ai/flows/quiz-feedback-flow';
 import { cleanPdfText } from '@/ai/flows/clean-text-flow';
+import { generateSpeech } from '@/ai/flows/generate-speech';
 import dynamic from 'next/dynamic';
 import { Skeleton } from '@/components/ui/skeleton';
 
@@ -120,7 +120,6 @@ export default function ReadPage() {
 
   const [isDragging, setIsDragging] = useState(false);
   const [generationState, setGenerationState] = useState<GenerationState>('idle');
-  const generationAbortController = useRef<AbortController | null>(null);
 
   const [synthesisText, setSynthesisText] = useState('');
   const [synthesisVoice, setSynthesisVoice] = useState('openai/alloy');
@@ -136,6 +135,7 @@ export default function ReadPage() {
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const previewAudioRef = useRef<HTMLAudioElement | null>(null);
   const viewerContainerRef = useRef<HTMLDivElement>(null);
+  const audioPlayerRef = useRef<HTMLDivElement>(null);
   const localAudioUrlRef = useRef<string | null>(null); 
   const router = useRouter();
   const chatWindowRef = useRef<HTMLDivElement>(null);
@@ -338,10 +338,9 @@ export default function ReadPage() {
   
   const handleGenerateAudio = async () => {
       if (generationState === 'generating') {
-          if (generationAbortController.current) {
-              generationAbortController.current.abort();
-              toast({ title: "Cancelled", description: "Audio generation has been cancelled." });
-          }
+          // Cancellation is handled by Next.js server action lifecycle.
+          // We can't easily abort from the client, but if the component unmounts, it should cancel.
+          toast({ title: "In Progress", description: "Audio generation is already running." });
           return;
       }
 
@@ -349,39 +348,19 @@ export default function ReadPage() {
           toast({ variant: "destructive", title: "No Document", description: "Please load a document first." });
           return;
       }
-
-      generationAbortController.current = new AbortController();
-      const signal = generationAbortController.current.signal;
       
       setGenerationState('generating');
-      toast({ title: "Starting Audio Generation", description: "Formatting text and preparing to generate speech..." });
+      toast({ title: "Starting Audio Generation", description: "This may take a few moments..." });
 
       try {
-        const response = await fetch('/api/generate-speech', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                text: documentText,
-                voice: selectedVoice,
-                speakingRate: speakingRate,
-            }),
-            signal: signal,
+        const result = await generateSpeech({
+            text: documentText,
+            voice: selectedVoice,
+            speakingRate: speakingRate,
         });
         
-        if (signal.aborted) {
-            return;
-        }
-
-        if (!response.ok) {
-            const errorData = await response.json();
-            throw new Error(errorData.error || 'Speech generation API failed');
-        }
-        const result = await response.json();
-
         if (!result.audioDataUris || result.audioDataUris.length === 0) {
-            if (!signal.aborted) {
-                toast({ title: "Generation Stopped", description: "Audio generation was stopped or resulted in no audio." });
-            }
+            toast({ title: "Generation Stopped", description: "Audio generation resulted in no audio." });
             return;
         }
         
@@ -396,7 +375,6 @@ export default function ReadPage() {
                 'x-doc-id': activeDoc.id,
             },
             body: mergedAudioBlob,
-            signal: signal,
         });
         if (!uploadAudioResponse.ok) throw new Error('Audio Upload failed');
         const audioBlobResult = await uploadAudioResponse.json();
@@ -417,16 +395,11 @@ export default function ReadPage() {
         toast({ title: "Success", description: "Audio generated and saved." });
 
       } catch (error: any) {
-        if (error.name === 'AbortError') {
-          console.log("Audio generation was aborted by the user.");
-        } else {
-          console.error('Speech generation error', error);
-          const errorMessage = error instanceof Error ? error.message : "An unknown error occurred";
-          toast({ variant: "destructive", title: "Audio Error", description: `Could not generate audio. ${errorMessage}` });
-        }
+        console.error('Speech generation error', error);
+        const errorMessage = error instanceof Error ? error.message : "An unknown error occurred";
+        toast({ variant: "destructive", title: "Audio Error", description: `Could not generate audio. ${errorMessage}` });
       } finally {
         setGenerationState('idle');
-        generationAbortController.current = null;
       }
   };
   
@@ -488,18 +461,11 @@ export default function ReadPage() {
   
   const handlePlayAiResponse = async (text: string) => {
     try {
-      const response = await fetch('/api/generate-speech', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
+      const result = await generateSpeech({
           text,
-          voice: selectedVoice,
-          speakingRate: speakingRate,
-        }),
+          voice: selectedVoice, // Use global voice
+          speakingRate: speakingRate, // Use global rate
       });
-
-      if (!response.ok) throw new Error('Speech generation API failed');
-      const result = await response.json();
       
       const mergedAudioBlob = await mergeAudio(result.audioDataUris);
       const audioUrl = URL.createObjectURL(mergedAudioBlob);
@@ -529,29 +495,18 @@ export default function ReadPage() {
           localAudioUrlRef.current = null;
       }
       try {
-          const response = await fetch('/api/generate-speech', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              text: synthesisText,
-              voice: synthesisVoice,
-              speakingRate: synthesisRate,
-            }),
-          });
+        const result = await generateSpeech({
+            text: synthesisText,
+            voice: synthesisVoice, // Use local voice for this tab
+            speakingRate: synthesisRate, // Use local rate for this tab
+        });
           
-          if (!response.ok) {
-            const errorData = await response.json();
-            throw new Error(errorData.error || 'API call failed');
-          }
-
-          const result = await response.json();
-          
-          if (result.audioDataUris && result.audioDataUris.length > 0) {
-              const mergedAudioBlob = await mergeAudio(result.audioDataUris);
-              const audioUrl = URL.createObjectURL(mergedAudioBlob);
-              localAudioUrlRef.current = audioUrl;
-              setSynthesisAudioUrl(audioUrl);
-          }
+        if (result.audioDataUris && result.audioDataUris.length > 0) {
+            const mergedAudioBlob = await mergeAudio(result.audioDataUris);
+            const audioUrl = URL.createObjectURL(mergedAudioBlob);
+            localAudioUrlRef.current = audioUrl;
+            setSynthesisAudioUrl(audioUrl);
+        }
       } catch (error) {
           const errorMessage = error instanceof Error ? error.message : "An unknown error occurred";
           toast({ variant: "destructive", title: "Synthesis Error", description: `Could not generate audio: ${errorMessage}` });
@@ -1029,10 +984,10 @@ export default function ReadPage() {
                                         <Tooltip>
                                             <TooltipTrigger asChild>
                                                 <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleGenerateAudio()} disabled={generationState === 'generating' || activeDoc?.id !== doc.id}>
-                                                    {generationState === 'generating' && activeDoc?.id === doc.id ? <XCircle className="h-4 w-4 text-destructive" /> : <Mic className="h-4 w-4" />}
+                                                    {generationState === 'generating' && activeDoc?.id === doc.id ? <Loader2 className="h-4 w-4 animate-spin text-destructive" /> : <Mic className="h-4 w-4" />}
                                                 </Button>
                                             </TooltipTrigger>
-                                            <TooltipContent><p>{generationState === 'generating' && activeDoc?.id === doc.id ? 'Cancel Generation' : 'Generate Audio'}</p></TooltipContent>
+                                            <TooltipContent><p>{generationState === 'generating' && activeDoc?.id === doc.id ? 'Generating...' : 'Generate Audio'}</p></TooltipContent>
                                         </Tooltip>
                                     )}
                                     <Tooltip>
@@ -1082,11 +1037,7 @@ export default function ReadPage() {
           </Sidebar>
           )}
         
-        <div className="flex-1 flex flex-col relative" 
-            ref={viewerContainerRef}
-            onMouseEnter={() => setShowControls(true)}
-            onMouseLeave={() => setShowControls(false)}
-        >
+        <div className="flex-1 flex flex-col relative" ref={viewerContainerRef}>
             <main className="flex-1 flex items-center justify-center overflow-auto bg-muted/30">
               {(pdfState === 'idle' || pdfState === 'error') && renderContent()}
               <div className={cn("w-full h-full relative", pdfState === 'loaded' ? 'flex items-center justify-center' : 'hidden')}>
@@ -1099,7 +1050,12 @@ export default function ReadPage() {
               </div>
             </main>
             {pdfState === 'loaded' && (
-                <div className={cn("absolute inset-x-0 bottom-0 z-10 transition-opacity duration-300", showControls ? 'opacity-100' : 'opacity-0 pointer-events-none')}>
+                <div 
+                    ref={audioPlayerRef}
+                    onMouseEnter={() => setShowControls(true)}
+                    onMouseLeave={() => setShowControls(false)}
+                    className={cn("absolute inset-x-0 bottom-0 z-10 transition-opacity duration-300", showControls ? 'opacity-100' : 'opacity-0 pointer-events-none')}
+                >
                     <AudioPlayer
                         isSpeaking={isSpeaking}
                         processingStage={generationState}
