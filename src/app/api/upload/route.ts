@@ -5,8 +5,8 @@ import { randomUUID } from 'crypto';
 
 export async function POST(request: NextRequest) {
   const session = await getSession();
-  if (!session?.userId) {
-    return NextResponse.json({ message: 'Unauthorized' }, { status: 401 });
+  if (!session?.userId || !session.username) {
+    return NextResponse.json({ message: 'Unauthorized or username not set' }, { status: 401 });
   }
 
   const originalFilename = request.headers.get('x-vercel-filename');
@@ -24,12 +24,14 @@ export async function POST(request: NextRequest) {
     );
   }
   
-  const blobName = `${session.userId}/${randomUUID()}-${originalFilename}`;
+  // Use the new path structure: readify/[username]/[docId]-[originalFilename]
+  const docId = request.headers.get('x-doc-id') || randomUUID();
+  const blobName = `readify/${session.username}/${docId}-${originalFilename}`;
 
   try {
     const blob = await put(blobName, request.body, {
       access: 'public',
-      addRandomSuffix: false, // We've added a UUID, so this isn't needed
+      addRandomSuffix: false,
     });
 
     return NextResponse.json(blob);

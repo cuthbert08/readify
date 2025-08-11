@@ -114,7 +114,7 @@ export default function ReadPage() {
   const [aiQuizOutput, setAiQuizOutput] = useState<GenerateQuizOutput | null>(null);
   const [aiGlossaryOutput, setAiGlossaryOutput] = useState<GenerateGlossaryOutput | null>(null);
 
-  const [showControls, setShowControls] = useState(true);
+  const [showControls, setShowControls] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
   const [userEmail, setUserEmail] = useState('');
 
@@ -494,7 +494,7 @@ export default function ReadPage() {
         body: JSON.stringify({
           text,
           voice: selectedVoice,
-          speakingRate: 1.0, // Use a default rate for chat responses
+          speakingRate: speakingRate,
         }),
       });
 
@@ -1082,7 +1082,11 @@ export default function ReadPage() {
           </Sidebar>
           )}
         
-        <div className="flex-1 flex flex-col relative" ref={viewerContainerRef}>
+        <div className="flex-1 flex flex-col relative" 
+            ref={viewerContainerRef}
+            onMouseEnter={() => setShowControls(true)}
+            onMouseLeave={() => setShowControls(false)}
+        >
             <main className="flex-1 flex items-center justify-center overflow-auto bg-muted/30">
               {(pdfState === 'idle' || pdfState === 'error') && renderContent()}
               <div className={cn("w-full h-full relative", pdfState === 'loaded' ? 'flex items-center justify-center' : 'hidden')}>
