@@ -94,14 +94,17 @@ export const generateSpeech = ai.defineFlow(
     inputSchema: GenerateSpeechInputSchema,
     outputSchema: GenerateSpeechOutputSchema,
   },
-  async (input, {stream, onCancel}) => {
+  async (input, { onCancel }) => {
     
     if (!input.text || !input.text.trim()) {
         throw new Error("Input text cannot be empty.");
     }
     
     const controller = new AbortController();
-    onCancel(() => controller.abort());
+    onCancel(() => {
+        console.log("GenerateSpeech flow is being cancelled.");
+        controller.abort()
+    });
 
     try {
         console.log('--- Starting speech generation flow ---');
