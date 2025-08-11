@@ -64,7 +64,7 @@ async function generateOpenAI(textChunks: string[], voice: string, speed: number
     return Promise.all(audioGenerationPromises);
 }
 
-async function generateAmazon(textChunks: string[], voice: string) {
+async function generateAmazon(textChunks: string[], voice: string, speed: number) {
     const pollyUrl = process.env.AMAZON_POLLY_API_URL;
     if (!pollyUrl) throw new Error('Amazon Polly API URL is not configured.');
 
@@ -75,6 +75,7 @@ async function generateAmazon(textChunks: string[], voice: string) {
             body: JSON.stringify({
                 text: chunk,
                 voiceId: voice,
+                speakingRate: speed, // Add speaking rate for Amazon Polly
             }),
         });
         if (!response.ok) throw new Error(`Failed to get audio from Amazon Polly: ${await response.text()}`);
@@ -112,7 +113,7 @@ export async function generateSpeech(
                 audioDataUris = await generateOpenAI(textChunks, voiceName, speakingRate);
                 break;
             case 'amazon':
-                audioDataUris = await generateAmazon(textChunks, voiceName);
+                audioDataUris = await generateAmazon(textChunks, voiceName, speakingRate);
                 break;
             default:
                 throw new Error(`Unsupported voice provider: ${provider}`);

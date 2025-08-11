@@ -10,7 +10,7 @@ import { Slider } from './ui/slider';
 
 type AudioPlayerProps = {
   isSpeaking: boolean;
-  processingStage: 'idle' | 'cleaning' | 'generating' | 'error';
+  processingStage: 'idle' | 'generating' | 'error';
   processingMessage: string;
   onPlayPause: () => void;
   canPlay: boolean;
