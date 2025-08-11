@@ -148,6 +148,8 @@ export const generateSpeech = ai.defineFlow(
 
         const { formattedText } = await formatTextForSpeech({ rawText: input.text });
         
+        // OpenAI has a 4096 character limit per request.
+        // Google's limit is higher (5000), but we'll use a safe value for all.
         const textChunks = splitText(formattedText, 4000);
         console.log(`Generated ${textChunks.length} text chunks.`);
         

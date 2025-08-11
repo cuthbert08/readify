@@ -90,6 +90,9 @@ async function handleAmazonPreview(voice: string) {
 
     if (!response.ok) throw new Error('Failed to get audio from Amazon Polly.');
     const { audioUrl } = await response.json();
+    // Return the full data URI, not just the URL from Polly.
+    // The schema expects a data URI, but Polly returns a pre-signed URL.
+    // We can just use the URL directly as the source for the audio element.
     return audioUrl;
 }
 
