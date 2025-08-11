@@ -7,11 +7,6 @@ import type { PDFDocumentProxy, PDFPageProxy, TextContent } from 'pdfjs-dist/typ
 import { Skeleton } from './ui/skeleton';
 import 'pdfjs-dist/web/pdf_viewer.css';
 
-type PdfViewerProps = {
-    pdfUrl: string | null;
-    scale: number;
-};
-
 const Page: React.FC<{ pagePromise: Promise<PDFPageProxy>; scale: number; pageIndex: number }> = React.memo(({ pagePromise, scale, pageIndex }) => {
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const textLayerRef = useRef<HTMLDivElement>(null);
@@ -48,13 +43,20 @@ const Page: React.FC<{ pagePromise: Promise<PDFPageProxy>; scale: number; pageIn
 
             const textContent = await page.getTextContent();
             
-            textLayerRef.current.innerHTML = ''; // Clear previous text layer
-            pdfjsLib.renderTextLayer({
-                textContentSource: textContent,
-                container: textLayerRef.current,
-                viewport: viewport,
-                textDivs: [],
+            const textLayer = textLayerRef.current;
+            textLayer.innerHTML = '';
+            textLayer.style.width = `${viewport.width}px`;
+            textLayer.style.height = `${viewport.height}px`;
+
+            const textLayerBuilder = new pdfjsLib.TextLayerBuilder({
+                textLayerDiv: textLayer,
+                pageIndex: page.pageIndex,
+                viewport,
             });
+
+            textLayerBuilder.setTextContent(textContent);
+            textLayerBuilder.render();
+
         };
         renderPage();
     }, [page, viewport]);
