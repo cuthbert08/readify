@@ -120,13 +120,12 @@ async function generateAmazon(textChunks: string[], voice: string, speed: number
             body: JSON.stringify({
                 text: chunk,
                 voiceId: voice,
-                // Note: Amazon Polly speed is controlled differently, often via SSML.
-                // We're omitting it here for simplicity.
             }),
         });
-        if (!response.ok) throw new Error('Failed to get audio from Amazon Polly.');
-        const { audioUrl } = await response.json();
-        return audioUrl;
+        if (!response.ok) throw new Error(`Failed to get audio from Amazon Polly: ${response.statusText}`);
+        const { audio } = await response.json();
+        if (!audio) throw new Error('Amazon Polly response did not include audio data.');
+        return `data:audio/mp3;base64,${audio}`;
     });
     return Promise.all(audioGenerationPromises);
 }
