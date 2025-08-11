@@ -5,7 +5,6 @@ import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import type { PDFDocumentProxy } from 'pdfjs-dist/types/src/display/api';
 import { UploadCloud, FileText, Loader2, LogOut, Save, Library, Download, Bot, Lightbulb, HelpCircle, Cloud, CloudOff, Settings, Menu, Home, BarChart, BookOpenCheck, BrainCircuit, Mic, FastForward, Rewind, Wind, Maximize, Minimize, ZoomIn, ZoomOut, Trash2, XCircle, MessageSquare } from 'lucide-react';
 import { useRouter } from 'next/navigation';
-import PdfViewer from '@/components/pdf-viewer';
 import AudioPlayer from '@/components/audio-player';
 import { useToast } from "@/hooks/use-toast";
 import { Button } from '@/components/ui/button';
@@ -34,6 +33,19 @@ import { ThemeToggle } from '@/components/theme-toggle';
 import { ChatWindow } from '@/components/chat-window';
 import { generateQuizFeedback } from '@/ai/flows/quiz-feedback-flow';
 import { cleanPdfText } from '@/ai/flows/clean-text-flow';
+import dynamic from 'next/dynamic';
+import { Skeleton } from '@/components/ui/skeleton';
+
+const PdfViewer = dynamic(() => import('@/components/pdf-viewer'), { 
+    ssr: false,
+    loading: () => (
+        <div className="space-y-4 p-4">
+            {Array.from(new Array(3), (_, index) => (
+                <Skeleton key={index} className="h-[842px] w-[595px] rounded-md mx-auto" />
+            ))}
+        </div>
+    )
+});
 
 
 type PdfState = 'idle' | 'loading' | 'loaded' | 'error';
@@ -1149,3 +1161,5 @@ export default function ReadPage() {
     </TooltipProvider>
   );
 }
+
+    
