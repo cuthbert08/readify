@@ -72,51 +72,35 @@ async function generateOpenAI(textChunks: string[], voice: string, speed: number
     return Promise.all(audioGenerationPromises);
 }
 
-// Helper to introduce a delay
-const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
-
-async function generateAmazon(textChunks: string[], voice: string, speed: number) {
+async function generateAmazon(formattedText: string, voice: string, speed: number): Promise<string[]> {
     const pollyUrl = process.env.AMAZON_POLLY_API_URL;
     if (!pollyUrl) {
         throw new Error('Amazon Polly API URL is not configured. Please set the AMAZON_POLLY_API_URL environment variable.');
     }
 
-    const audioUris: string[] = [];
+    const response = await fetch(pollyUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            text: formattedText, // Send the full text, Lambda will handle chunking
+            voiceId: voice,
+            speakingRate: speed,
+        }),
+    });
 
-    // Process chunks sequentially with a small delay to avoid overwhelming the API
-    for (let i = 0; i < textChunks.length; i++) {
-        const chunk = textChunks[i];
-        console.log(`[Amazon Polly] Processing chunk ${i + 1}/${textChunks.length}, length: ${chunk.length}`);
-
-        const response = await fetch(pollyUrl, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                text: chunk,
-                voiceId: voice,
-                speakingRate: speed,
-            }),
-        });
-
-        if (!response.ok) {
-            const errorBody = await response.text();
-            throw new Error(`Failed to get audio from Amazon Polly: ${errorBody}`);
-        }
-
-        const { audio } = await response.json();
-        if (!audio) {
-            throw new Error('Amazon Polly response did not include audio data.');
-        }
-
-        audioUris.push(`data:audio/mp3;base64,${audio}`);
-
-        // Add a small delay between requests to avoid rate limiting issues
-        if (i < textChunks.length - 1) {
-            await sleep(200); 
-        }
+    if (!response.ok) {
+        const errorBody = await response.text();
+        throw new Error(`Failed to get audio from Amazon Polly: ${errorBody}`);
     }
 
-    return audioUris;
+    const { audio } = await response.json();
+    if (!audio) {
+        throw new Error('Amazon Polly response did not include audio data.');
+    }
+
+    // The Lambda returns a single base64 string, so we wrap it in an array
+    // and the client will prepend the data URI prefix.
+    return [`data:audio/mp3;base64,${audio}`];
 }
 
 // This function can be directly called from client components as a Server Action.
@@ -133,20 +117,20 @@ export async function generateSpeech(
 
         const { formattedText } = await formatTextForSpeech({ rawText: input.text });
         
-        // Use a safer character limit for Polly. OpenAI's is 4096.
-        const textChunks = splitText(formattedText, 2800);
-        console.log(`Generated ${textChunks.length} text chunks.`);
-        
         const [provider, voiceName] = input.voice.split('/');
         const speakingRate = input.speakingRate || 1.0;
         let audioDataUris: string[] = [];
 
         switch (provider) {
             case 'openai':
+                // OpenAI has its own chunking logic as it's handled internally.
+                const textChunks = splitText(formattedText, 4000);
+                console.log(`Generated ${textChunks.length} text chunks for OpenAI.`);
                 audioDataUris = await generateOpenAI(textChunks, voiceName, speakingRate);
                 break;
             case 'amazon':
-                audioDataUris = await generateAmazon(textChunks, voiceName, speakingRate);
+                // The new Lambda handles chunking, so we send the whole text.
+                audioDataUris = await generateAmazon(formattedText, voiceName, speakingRate);
                 break;
             default:
                 throw new Error(`Unsupported voice provider: ${provider}`);
