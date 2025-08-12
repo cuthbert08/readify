@@ -438,7 +438,7 @@ export default function ReadPage() {
         const result = await summarizePdf({ pdfText: documentText });
         setAiSummaryOutput(result);
       } else if (type === 'glossary') {
-          const result = await generateGlossary({ documentText: documentText });
+          const result = await generateGlossary({ documentText });
           setAiGlossaryOutput(result);
       } else if (type === 'quiz') {
           if (activeDoc?.quizAttempt) {
