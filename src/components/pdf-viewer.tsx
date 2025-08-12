@@ -14,6 +14,7 @@ import PdfToolbar from './pdf-toolbar';
 // This is the recommended approach for Next.js and other bundlers
 pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
 
+
 type PdfViewerProps = {
   file: string;
   zoomLevel: number;
