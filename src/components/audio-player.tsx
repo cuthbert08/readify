@@ -60,69 +60,69 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
 
   return (
     <div className="p-2 md:p-4 w-full">
-      <Card className="max-w-xl mx-auto p-3 shadow-2xl bg-card/90 backdrop-blur-sm">
-        <div className='h-16 flex items-center justify-center'>
-            {isGeneratingSpeech ? (
-                <div className="flex items-center justify-center gap-2">
-                    <Loader2 className="h-5 w-5 animate-spin" />
-                    <span className="text-sm font-medium text-muted-foreground">{processingMessage}</span>
-                </div>
-            ) : (
-                <div className="flex items-center justify-center gap-4 w-full">
-                    <Button variant="ghost" size="icon" onClick={onRewind} disabled={!hasAudio}>
-                        <Rewind />
-                        <span className="sr-only">Rewind 10s</span>
-                    </Button>
-                    <Button 
-                        onClick={onPlayPause} 
-                        size="lg" 
-                        className="rounded-full w-16 h-16 bg-primary hover:bg-primary/90 text-primary-foreground"
-                        aria-label={isSpeaking ? 'Pause' : 'Play'}
-                        disabled={isGeneratingSpeech || !canPlay}
-                    >
-                        {isSpeaking ? <Pause className="h-8 w-8" /> : <Play className="h-8 w-8" />}
-                    </Button>
-                    <Button variant="ghost" size="icon" onClick={onForward} disabled={!hasAudio}>
-                        <FastForward />
-                        <span className="sr-only">Forward 10s</span>
-                    </Button>
-                </div>
-            )}
-        </div>
-        <div className="flex items-center gap-2 mt-2">
-            <span className="text-xs font-mono">{formatTime(currentTime)}</span>
-            <Slider
-                value={[currentTime]}
-                max={duration}
-                step={1}
-                onValueChange={(value) => onSeek(value[0])}
-                disabled={!hasAudio}
-                className="w-full"
-            />
-            <span className="text-xs font-mono">{formatTime(duration)}</span>
-        </div>
-        <div className="flex items-center justify-center gap-1 mt-2">
-            <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" size="sm" disabled={!hasAudio}>
-                     <Wind />
-                     <span className="sr-only">Playback Speed</span>
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="center">
-                  {playbackRates.map(rate => (
-                     <DropdownMenuItem key={rate} onClick={() => onPlaybackRateChange(rate)}>
-                        {rate === playbackRate && '✓'} {rate}x
-                     </DropdownMenuItem>
-                  ))}
-                </DropdownMenuContent>
-            </DropdownMenu>
-            <a href={showDownload ? downloadUrl : undefined} download={showDownload ? downloadFileName : undefined}>
-                <Button variant="ghost" size="sm" disabled={!showDownload}>
-                  <Download />
-                  <span className="sr-only">Download Audio</span>
+      <Card className="max-w-xl mx-auto p-4 shadow-2xl bg-card/90 backdrop-blur-sm">
+        <div className="flex items-center gap-4">
+            <div className="flex items-center gap-2">
+                <Button variant="ghost" size="icon" onClick={onRewind} disabled={!hasAudio}>
+                    <Rewind className="h-5 w-5" />
+                    <span className="sr-only">Rewind 10s</span>
                 </Button>
-            </a>
+                <Button 
+                    onClick={onPlayPause} 
+                    size="lg" 
+                    className="rounded-full w-14 h-14 bg-primary hover:bg-primary/90 text-primary-foreground"
+                    aria-label={isSpeaking ? 'Pause' : 'Play'}
+                    disabled={isGeneratingSpeech || !canPlay}
+                >
+                    {isGeneratingSpeech ? (
+                        <Loader2 className="h-6 w-6 animate-spin" />
+                    ) : (
+                        isSpeaking ? <Pause className="h-6 w-6" /> : <Play className="h-6 w-6 ml-1" />
+                    )}
+                </Button>
+                <Button variant="ghost" size="icon" onClick={onForward} disabled={!hasAudio}>
+                    <FastForward className="h-5 w-5" />
+                    <span className="sr-only">Forward 10s</span>
+                </Button>
+            </div>
+            <div className="flex-1 flex flex-col gap-2">
+                 <Slider
+                    value={[currentTime]}
+                    max={duration || 1}
+                    step={1}
+                    onValueChange={(value) => onSeek(value[0])}
+                    disabled={!hasAudio}
+                    className="w-full"
+                />
+                <div className="flex justify-between items-center text-xs text-muted-foreground">
+                    <span>{formatTime(currentTime)}</span>
+                     {isGeneratingSpeech && <span className="text-xs font-medium">{processingMessage}</span>}
+                    <span>{formatTime(duration)}</span>
+                </div>
+            </div>
+             <div className="flex items-center gap-1">
+                <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                    <Button variant="ghost" size="sm" className="w-20" disabled={!hasAudio}>
+                        <Wind className="mr-2 h-4 w-4" />
+                        {playbackRate.toFixed(2)}x
+                    </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="center">
+                    {playbackRates.map(rate => (
+                        <DropdownMenuItem key={rate} onClick={() => onPlaybackRateChange(rate)}>
+                            {rate.toFixed(2)}x {rate === 1.0 && "(Normal)"}
+                        </DropdownMenuItem>
+                    ))}
+                    </DropdownMenuContent>
+                </DropdownMenu>
+                <a href={showDownload ? downloadUrl : undefined} download={showDownload ? downloadFileName : undefined}>
+                    <Button variant="ghost" size="icon" disabled={!showDownload}>
+                        <Download className="h-5 w-5"/>
+                        <span className="sr-only">Download Audio</span>
+                    </Button>
+                </a>
+            </div>
         </div>
       </Card>
     </div>

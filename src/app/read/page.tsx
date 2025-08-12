@@ -890,7 +890,7 @@ export default function ReadPage() {
             <main className="flex-1 flex items-center justify-center overflow-auto">
               {renderContent()}
             </main>
-            {(activeDoc?.audioUrl || generationState === 'generating') && !isFullScreen && (
+            {(activeDoc?.audioUrl || generationState !== 'idle') && !isFullScreen && (
                 <div 
                     className="absolute inset-x-0 bottom-0 z-10"
                 >
@@ -904,7 +904,7 @@ export default function ReadPage() {
                         onPlaybackRateChange={setPlaybackRate}
                         showDownload={!!activeDoc?.audioUrl && generationState === 'idle'}
                         downloadUrl={activeDoc?.audioUrl || ''}
-                        downloadFileName={`${activeDoc?.fileName || 'audio'}.mp3`}
+                        downloadFileName={`${activeDoc?.fileName?.replace(/\.pdf$/i, '') || 'audio'}.mp3`}
                         progress={audioProgress}
                         duration={audioDuration}
                         currentTime={audioCurrentTime}
