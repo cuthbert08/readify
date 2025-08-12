@@ -123,7 +123,7 @@ export async function generateSpeech(
 
         switch (provider) {
             case 'openai':
-                // OpenAI has its own chunking logic as it's handled internally.
+                // OpenAI has a 4096 character limit per request.
                 const textChunks = splitText(formattedText, 4000);
                 console.log(`Generated ${textChunks.length} text chunks for OpenAI.`);
                 audioDataUris = await generateOpenAI(textChunks, voiceName, speakingRate);
