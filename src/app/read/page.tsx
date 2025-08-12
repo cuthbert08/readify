@@ -104,6 +104,8 @@ export default function ReadPage() {
   const [isUploading, setIsUploading] = useState(false);
   const [isFullScreen, setIsFullScreen] = useState(false);
   const [pdfZoomLevel, setPdfZoomLevel] = useState(1);
+  const [isSavingZoom, setIsSavingZoom] = useState(false);
+
 
   const { toast } = useToast();
   const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -650,23 +652,29 @@ export default function ReadPage() {
     }, {} as Record<string, AvailableVoice[]>);
   }, [availableVoices]);
 
+  const handleZoomIn = () => setPdfZoomLevel(Math.min(pdfZoomLevel + 0.2, 3));
+  const handleZoomOut = () => setPdfZoomLevel(Math.max(pdfZoomLevel - 0.2, 0.4));
+  const handleSaveZoom = async () => {
+    if (!activeDoc) return;
+    setIsSavingZoom(true);
+    try {
+        await saveDocument({ id: activeDoc.id, zoomLevel: pdfZoomLevel });
+        await fetchUserDocuments();
+        toast({ title: 'Zoom level saved' });
+    } catch (e) {
+        toast({ variant: 'destructive', title: 'Error', description: 'Could not save zoom level.'});
+    } finally {
+        setIsSavingZoom(false);
+    }
+  }
+
+
   const renderContent = () => {
     if (activeDoc) {
       return (
           <PdfViewer
             file={activeDoc.pdfUrl}
             zoomLevel={pdfZoomLevel}
-            onZoomChange={setPdfZoomLevel}
-            isFullScreen={isFullScreen}
-            onFullScreenToggle={() => setIsFullScreen(!isFullScreen)}
-            onSaveZoom={async (zoom) => {
-              if (activeDoc && activeDoc.id) {
-                  const updatedDoc = await saveDocument({ id: activeDoc.id, zoomLevel: zoom });
-                  setActiveDoc(updatedDoc);
-                  await fetchUserDocuments();
-                  toast({ title: 'Zoom level saved' });
-              }
-            }}
           />
       );
     }
@@ -890,7 +898,7 @@ export default function ReadPage() {
             <main className="flex-1 flex items-center justify-center overflow-auto">
               {renderContent()}
             </main>
-            {(activeDoc?.audioUrl || generationState !== 'idle') && !isFullScreen && (
+            {(activeDoc || generationState !== 'idle') && (
                 <div 
                     className="absolute inset-x-0 bottom-0 z-10"
                 >
@@ -911,6 +919,15 @@ export default function ReadPage() {
                         onSeek={handleSeek}
                         onForward={handleForward}
                         onRewind={handleRewind}
+                        // PDF Controls
+                        zoomLevel={pdfZoomLevel}
+                        onZoomIn={handleZoomIn}
+                        onZoomOut={handleZoomOut}
+                        isFullScreen={isFullScreen}
+                        onFullScreenToggle={() => setIsFullScreen(!isFullScreen)}
+                        onSaveZoom={handleSaveZoom}
+                        isSavingZoom={isSavingZoom}
+                        isPdfLoaded={!!activeDoc}
                     />
                 </div>
             )}
