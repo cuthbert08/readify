@@ -72,7 +72,7 @@ async function generateOpenAI(textChunks: string[], voice: string, speed: number
     return Promise.all(audioGenerationPromises);
 }
 
-async function generateAmazon(formattedText: string, voice: string, speed: number): Promise<string[]> {
+async function generateAmazon(formattedText: string, voice: string): Promise<string[]> {
     const pollyUrl = process.env.AMAZON_POLLY_API_URL;
     if (!pollyUrl) {
         throw new Error('Amazon Polly API URL is not configured. Please set the AMAZON_POLLY_API_URL environment variable.');
@@ -84,7 +84,6 @@ async function generateAmazon(formattedText: string, voice: string, speed: numbe
         body: JSON.stringify({
             text: formattedText, // Send the full text, Lambda will handle chunking
             voiceId: voice,
-            speakingRate: speed,
         }),
     });
 
@@ -130,7 +129,7 @@ export async function generateSpeech(
                 break;
             case 'amazon':
                 // The new Lambda handles chunking, so we send the whole text.
-                audioDataUris = await generateAmazon(formattedText, voiceName, speakingRate);
+                audioDataUris = await generateAmazon(formattedText, voiceName);
                 break;
             default:
                 throw new Error(`Unsupported voice provider: ${provider}`);
