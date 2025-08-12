@@ -4,7 +4,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "genkit dev -p 3001 & next dev",
+    "dev": "npx genkit dev -p 3001 & next dev",
     "build": "next build",
     "start": "next start",
     "lint": "next lint"
