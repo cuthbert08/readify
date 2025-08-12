@@ -32,10 +32,13 @@ import { ChatWindow } from '@/components/chat-window';
 import { generateQuizFeedback } from '@/ai/flows/quiz-feedback-flow';
 import { cleanPdfText } from '@/ai/flows/clean-text-flow';
 import { generateSpeech } from '@/ai/flows/generate-speech';
+import PdfViewer from '@/components/pdf-viewer';
+import type { PDFDocumentProxy } from 'pdfjs-dist';
 
 type GenerationState = 'idle' | 'generating' | 'error';
 type ActiveDocument = Document;
 
+type UploadStage = 'idle' | 'uploading' | 'extracting' | 'cleaning' | 'saving' | 'error';
 
 // Helper function to concatenate audio blobs on the client-side
 async function mergeAudio(audioDataUris: string[]): Promise<Blob> {
@@ -61,9 +64,7 @@ async function mergeAudio(audioDataUris: string[]): Promise<Blob> {
 
 export default function ReadPage() {
   const [activeDoc, setActiveDoc] = useState<ActiveDocument | null>(null);
-
-  const [isSaving, setIsSaving] = useState(false);
-
+  
   const [documentText, setDocumentText] = useState('');
 
   const [isSpeaking, setIsSpeaking] = useState(false);
@@ -99,12 +100,18 @@ export default function ReadPage() {
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [isChatLoading, setIsChatLoading] = useState(false);
 
+  const [uploadStage, setUploadStage] = useState<UploadStage>('idle');
+  const [isUploading, setIsUploading] = useState(false);
+  const [isFullScreen, setIsFullScreen] = useState(false);
+  const [pdfZoomLevel, setPdfZoomLevel] = useState(1);
+
   const { toast } = useToast();
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const previewAudioRef = useRef<HTMLAudioElement | null>(null);
   const localAudioUrlRef = useRef<string | null>(null); 
   const router = useRouter();
   const chatWindowRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
 
   useEffect(() => {
@@ -185,9 +192,18 @@ export default function ReadPage() {
     setAiSummaryOutput(null);
     setAiQuizOutput(null);
     setAiGlossaryOutput(null);
-    // You would fetch the text content of the document here
-    // For now, let's assume it's stored in a field or needs to be fetched.
-    // setDocumentText(doc.textContent || ''); 
+    setPdfZoomLevel(doc.zoomLevel);
+    
+    // Fetch text if it's not already loaded or empty
+    if (!doc.textContent) {
+      // In a real app, you might fetch this on demand if it's large
+      // For now, we assume textContent is always saved with the doc
+      console.log("Document text is missing, AI tools will be limited.");
+      setDocumentText("");
+    } else {
+      setDocumentText(doc.textContent);
+    }
+
     if (doc.audioUrl && audioRef.current) {
         audioRef.current.src = doc.audioUrl;
         audioRef.current.load();
@@ -542,6 +558,87 @@ export default function ReadPage() {
       }
   }
 
+  const getUploadMessage = () => {
+    switch (uploadStage) {
+        case 'uploading': return 'Uploading file...';
+        case 'extracting': return 'Extracting text...';
+        case 'cleaning': return 'Cleaning up content...';
+        case 'saving': return 'Saving document...';
+        case 'error': return 'An error occurred during upload.';
+        default: return 'Drag & drop PDF here or click to upload';
+    }
+  };
+
+  const handleFileChange = (files: FileList | null) => {
+    if (files && files[0]) {
+      handleFileUpload(files[0]);
+    }
+  };
+
+  const handleFileUpload = async (file: File) => {
+    if (!file.type.includes('pdf')) {
+      toast({
+        variant: "destructive",
+        title: "Invalid File Type",
+        description: "Please upload a PDF file.",
+      });
+      return;
+    }
+    setIsUploading(true);
+    setUploadStage('uploading');
+
+    try {
+        // Step 1: Upload to Vercel Blob
+        const uploadResponse = await fetch('/api/upload', {
+            method: 'POST',
+            headers: { 'x-vercel-filename': file.name },
+            body: file,
+        });
+
+        if (!uploadResponse.ok) throw new Error('Failed to upload file.');
+        const blob = await uploadResponse.json();
+
+        // Step 2: Extract text from PDF
+        setUploadStage('extracting');
+        const pdf = await (window as any).pdfjsLib.getDocument(blob.url).promise;
+        const numPages = pdf.numPages;
+        let rawText = '';
+        for (let i = 1; i <= numPages; i++) {
+            const page = await pdf.getPage(i);
+            const textContent = await page.getTextContent();
+            rawText += textContent.items.map((item: any) => item.str).join(' ');
+        }
+        
+        // Step 3: Clean text with AI
+        setUploadStage('cleaning');
+        const { cleanedText } = await cleanPdfText({ rawText });
+        setDocumentText(cleanedText);
+
+        // Step 4: Save document to database
+        setUploadStage('saving');
+        const newDoc = await saveDocument({
+            fileName: file.name,
+            pdfUrl: blob.url,
+            textContent: cleanedText,
+            zoomLevel: 1,
+        });
+        
+        await fetchUserDocuments();
+        handleSelectDocument(newDoc);
+        toast({ title: "Success", description: "Your document has been prepared." });
+
+    } catch (error) {
+        setUploadStage('error');
+        console.error("File upload process failed:", error);
+        const message = error instanceof Error ? error.message : "An unknown error occurred during upload.";
+        toast({ variant: "destructive", title: "Upload Failed", description: message });
+    } finally {
+        setIsUploading(false);
+        setUploadStage('idle');
+    }
+  };
+
+
   const groupedVoices = useMemo(() => {
     return availableVoices.reduce((acc, voice) => {
         const provider = voice.provider;
@@ -554,90 +651,70 @@ export default function ReadPage() {
   }, [availableVoices]);
 
   const renderContent = () => {
-    return (
-        <Tabs defaultValue="synthesize" className="w-full max-w-3xl mx-auto mt-20">
-          <TabsList className="grid w-full grid-cols-1">
-              <TabsTrigger value="synthesize">Synthesize Speech</TabsTrigger>
-          </TabsList>
-          <TabsContent value="synthesize">
-              <Card className="p-6 mt-4">
-                  <div className="space-y-4">
-                      <h2 className="text-2xl font-headline">Text-to-Audio</h2>
-                      <p className="text-muted-foreground">Paste text below to generate audio and download it as an MP3 file.</p>
-                      <Textarea 
-                          placeholder="Paste your text here..." 
-                          className="min-h-48"
-                          value={synthesisText}
-                          onChange={(e) => setSynthesisText(e.target.value)}
-                      />
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          <div className='space-y-2'>
-                              <Label>Voice</Label>
-                              <Select value={synthesisVoice} onValueChange={setSynthesisVoice} disabled={isSynthesizing}>
-                                  <SelectTrigger>
-                                      <SelectValue placeholder="Select a voice" />
-                                  </SelectTrigger>
-                                  <SelectContent>
-                                    {Object.entries(groupedVoices).map(([provider, voices]) => (
-                                        <SelectGroup key={provider}>
-                                            <Label className="px-2 py-1.5 text-xs font-semibold text-muted-foreground">{provider.toUpperCase()}</Label>
-                                            {voices.map((voice) => (
-                                                <div key={voice.name} className="flex items-center justify-between pr-2">
-                                                    <SelectItem value={voice.name} className="flex-1">
-                                                        {voice.displayName} ({voice.gender})
-                                                    </SelectItem>
-                                                    <Button 
-                                                        variant="ghost" 
-                                                        size="icon" 
-                                                        className="h-7 w-7 ml-2 shrink-0"
-                                                        onClick={(e) => {
-                                                            e.stopPropagation();
-                                                            handlePreviewVoice(voice.name);
-                                                        }}
-                                                        aria-label={`Preview voice ${voice.name}`}
-                                                    >
-                                                        <Volume2 className="h-4 w-4" />
-                                                    </Button>
-                                                </div>
-                                            ))}
-                                        </SelectGroup>
-                                    ))}
-                                  </SelectContent>
-                              </Select>
-                          </div>
-                          <div className='space-y-2'>
-                              <Label htmlFor="synthesis-rate">Speaking Rate: {synthesisRate.toFixed(2)}x</Label>
-                              <Slider id="synthesis-rate" min={0.25} max={4.0} step={0.25} value={[synthesisRate]} onValueChange={(v) => setSynthesisRate(v[0])} disabled={isSynthesizing} />
-                          </div>
-                      </div>
-                      <Button onClick={handleSynthesize} disabled={isSynthesizing || !synthesisText.trim()}>
-                          {isSynthesizing ? <Loader2 className="mr-2 animate-spin"/> : <Mic className="mr-2"/>}
-                          {isSynthesizing ? 'Generating Audio...' : 'Generate Audio'}
-                      </Button>
-
-                      {synthesisAudioUrl && (
-                          <div className="space-y-2">
-                              <Label>Generated Audio</Label>
-                              <audio src={synthesisAudioUrl} controls className="w-full" />
-                               <a href={synthesisAudioUrl} download="synthesis.mp3">
-                                   <Button variant="outline" className="w-full">
-                                       <Download className="mr-2" />
-                                       Download MP3
-                                   </Button>
-                               </a>
-                          </div>
-                      )}
-                  </div>
-              </Card>
-          </TabsContent>
-        </Tabs>
+    if (activeDoc) {
+      return (
+          <PdfViewer
+            file={activeDoc.pdfUrl}
+            zoomLevel={pdfZoomLevel}
+            onZoomChange={setPdfZoomLevel}
+            isFullScreen={isFullScreen}
+            onFullScreenToggle={() => setIsFullScreen(!isFullScreen)}
+            onSaveZoom={async (zoom) => {
+              if (activeDoc && activeDoc.id) {
+                  const updatedDoc = await saveDocument({ id: activeDoc.id, zoomLevel: zoom });
+                  setActiveDoc(updatedDoc);
+                  await fetchUserDocuments();
+                  toast({ title: 'Zoom level saved' });
+              }
+            }}
+          />
       );
+    }
+
+    if (isUploading) {
+        return (
+            <div className="w-full h-full flex flex-col items-center justify-center text-center p-4 bg-muted/50 rounded-lg">
+                <Loader2 className="h-12 w-12 animate-spin text-primary mb-4" />
+                <p className="text-xl font-semibold">{getUploadMessage()}</p>
+                <p className="text-muted-foreground">Please wait while we process your document.</p>
+            </div>
+        );
+    }
+    
+    return (
+        <div
+          className="w-full h-full flex items-center justify-center p-4"
+          onDragOver={(e) => e.preventDefault()}
+          onDrop={(e) => {
+            e.preventDefault();
+            handleFileChange(e.dataTransfer.files);
+          }}
+        >
+            <div className="text-center p-8 border-2 border-dashed border-muted-foreground/30 rounded-xl max-w-lg w-full">
+                <UploadCloud className="mx-auto h-16 w-16 text-muted-foreground/50" />
+                <h3 className="mt-4 text-2xl font-headline">Prepare a New Document</h3>
+                <p className="mt-2 text-sm text-muted-foreground">
+                    Drag and drop a PDF file here, or click the button below to select one.
+                </p>
+                <Button className="mt-6" onClick={() => fileInputRef.current?.click()}>
+                    Select PDF File
+                </Button>
+                <input
+                    type="file"
+                    ref={fileInputRef}
+                    onChange={(e) => handleFileChange(e.target.files)}
+                    accept="application/pdf"
+                    className="hidden"
+                />
+            </div>
+        </div>
+    );
   }
 
   return (
     <TooltipProvider>
-      <div className="flex h-screen w-full bg-background">
-        <Sidebar>
+      <div className={cn("flex h-screen w-full bg-background", isFullScreen && "fixed inset-0 z-50")}>
+        <Sidebar className={cn(isFullScreen && "hidden")}>
             <SidebarHeader>
                 <div className="flex items-center justify-between">
                 <h1 className="text-2xl font-headline text-primary flex items-center gap-2"><BarChart /> Readify</h1>
@@ -809,11 +886,11 @@ export default function ReadPage() {
             </SidebarFooter>
         </Sidebar>
         
-        <div className="flex-1 flex flex-col relative">
-            <main className="flex-1 flex items-center justify-center overflow-auto bg-muted/30">
+        <div className="flex-1 flex flex-col relative bg-muted/30">
+            <main className="flex-1 flex items-center justify-center overflow-auto">
               {renderContent()}
             </main>
-            {(activeDoc?.audioUrl || generationState === 'generating') && (
+            {(activeDoc?.audioUrl || generationState === 'generating') && !isFullScreen && (
                 <div 
                     className="absolute inset-x-0 bottom-0 z-10"
                 >
@@ -823,11 +900,6 @@ export default function ReadPage() {
                         processingMessage={getProcessingMessage()}
                         onPlayPause={handlePlayPause}
                         canPlay={!!(activeDoc?.audioUrl)}
-                        isFullScreen={false}
-                        onFullScreen={() => {}}
-                        zoomLevel={1}
-                        onZoomIn={() => {}}
-                        onZoomOut={() => {}}
                         playbackRate={playbackRate}
                         onPlaybackRateChange={setPlaybackRate}
                         showDownload={!!activeDoc?.audioUrl && generationState === 'idle'}

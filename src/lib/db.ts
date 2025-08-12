@@ -26,6 +26,7 @@ export interface Document {
   userId: string;
   fileName: string;
   pdfUrl: string;
+  textContent: string; // Add this field to store cleaned text
   audioUrl: string | null;
   zoomLevel: number;
   createdAt: string;
@@ -93,8 +94,8 @@ export async function saveDocument(docData: Partial<Document>): Promise<Document
     return updatedDoc;
 
   } else {
-    if (!docData.fileName || !docData.pdfUrl) {
-      throw new Error("fileName and pdfUrl are required for new documents.");
+    if (!docData.fileName || !docData.pdfUrl || !docData.textContent) {
+      throw new Error("fileName, pdfUrl, and textContent are required for new documents.");
     }
     docId = randomUUID();
     const newDoc: Document = {
@@ -102,6 +103,7 @@ export async function saveDocument(docData: Partial<Document>): Promise<Document
       userId,
       fileName: docData.fileName,
       pdfUrl: docData.pdfUrl,
+      textContent: docData.textContent,
       audioUrl: docData.audioUrl || null,
       zoomLevel: docData.zoomLevel || 1,
       createdAt: new Date().toISOString(),

@@ -3,7 +3,7 @@
 
 import React from 'react';
 import { Button } from '@/components/ui/button';
-import { Play, Pause, Loader2, ZoomIn, ZoomOut, Maximize, Minimize, Download, Wind, FastForward, Rewind } from 'lucide-react';
+import { Play, Pause, Loader2, Download, Wind, FastForward, Rewind } from 'lucide-react';
 import { Card } from './ui/card';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from './ui/dropdown-menu';
 import { Slider } from './ui/slider';
@@ -14,11 +14,6 @@ type AudioPlayerProps = {
   processingMessage: string;
   onPlayPause: () => void;
   canPlay: boolean;
-  zoomLevel: number;
-  onZoomIn: () => void;
-  onZoomOut: () => void;
-  isFullScreen: boolean;
-  onFullScreen: () => void;
   playbackRate: number;
   onPlaybackRateChange: (rate: number) => void;
   showDownload: boolean;
@@ -48,10 +43,6 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
   processingMessage,
   onPlayPause,
   canPlay,
-  onZoomIn,
-  onZoomOut,
-  onFullScreen,
-  isFullScreen,
   playbackRate,
   onPlaybackRateChange,
   showDownload,
@@ -77,7 +68,7 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
                     <span className="text-sm font-medium text-muted-foreground">{processingMessage}</span>
                 </div>
             ) : (
-                <div className="flex items-center justify-between gap-4 w-full">
+                <div className="flex items-center justify-center gap-4 w-full">
                     <Button variant="ghost" size="icon" onClick={onRewind} disabled={!hasAudio}>
                         <Rewind />
                         <span className="sr-only">Rewind 10s</span>
@@ -111,18 +102,6 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
             <span className="text-xs font-mono">{formatTime(duration)}</span>
         </div>
         <div className="flex items-center justify-center gap-1 mt-2">
-             <Button variant="ghost" size="sm" onClick={onZoomOut}>
-                <ZoomOut />
-                <span className="sr-only">Zoom Out</span>
-            </Button>
-             <Button variant="ghost" size="sm" onClick={onZoomIn}>
-                <ZoomIn />
-                <span className="sr-only">Zoom In</span>
-            </Button>
-            <Button variant="ghost" size="sm" onClick={onFullScreen}>
-                {isFullScreen ? <Minimize /> : <Maximize />}
-                <span className="sr-only">{isFullScreen ? 'Exit Fullscreen' : 'Enter Fullscreen'}</span>
-            </Button>
             <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button variant="ghost" size="sm" disabled={!hasAudio}>
