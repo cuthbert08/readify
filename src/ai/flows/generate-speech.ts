@@ -93,15 +93,16 @@ async function generateAmazon(formattedText: string, voice: string): Promise<str
         throw new Error(`Failed to get audio from Amazon Polly: ${errorBody}`);
     }
 
-    const { audio } = await response.json();
-    if (!audio) {
-        throw new Error('Amazon Polly response did not include audio data.');
+    // The Lambda now returns an array of base64 chunks
+    const { audioChunks } = await response.json();
+    if (!audioChunks || !Array.isArray(audioChunks)) {
+        throw new Error('Amazon Polly response did not include audio data in the expected format.');
     }
 
-    // The Lambda returns a single base64 string, so we wrap it in an array
-    // and prepend the data URI prefix.
-    return [`data:audio/mp3;base64,${audio}`];
+    // Prepend the data URI prefix to each chunk
+    return audioChunks.map(chunk => `data:audio/mp3;base64,${chunk}`);
 }
+
 
 // This function can be directly called from client components as a Server Action.
 export async function generateSpeech(
@@ -129,7 +130,7 @@ export async function generateSpeech(
                 audioDataUris = await generateOpenAI(textChunks, voiceName, speakingRate);
                 break;
             case 'amazon':
-                // The new Lambda handles chunking, so we send the whole text.
+                // The new Lambda handles chunking and returns an array.
                 audioDataUris = await generateAmazon(formattedText, voiceName);
                 break;
             default:
