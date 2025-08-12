@@ -40,7 +40,11 @@ async function handleAmazonPreview(voice: string) {
         }),
     });
 
-    if (!response.ok) throw new Error(`Failed to get audio from Amazon Polly: ${await response.text()}`);
+    if (!response.ok) {
+        const errorBody = await response.text();
+        console.error("Amazon Polly Lambda Error (Preview):", errorBody);
+        throw new Error(`Failed to get audio from Amazon Polly: ${errorBody}`);
+    }
     const { audio } = await response.json();
     if (!audio) throw new Error('Amazon Polly response did not include audio data.');
 

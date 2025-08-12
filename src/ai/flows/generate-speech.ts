@@ -82,13 +82,14 @@ async function generateAmazon(formattedText: string, voice: string): Promise<str
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-            text: formattedText, // Send the full text, Lambda will handle chunking
+            text: formattedText,
             voiceId: voice,
         }),
     });
 
     if (!response.ok) {
         const errorBody = await response.text();
+        console.error("Amazon Polly Lambda Error:", errorBody);
         throw new Error(`Failed to get audio from Amazon Polly: ${errorBody}`);
     }
 
@@ -98,7 +99,7 @@ async function generateAmazon(formattedText: string, voice: string): Promise<str
     }
 
     // The Lambda returns a single base64 string, so we wrap it in an array
-    // and the client will prepend the data URI prefix.
+    // and prepend the data URI prefix.
     return [`data:audio/mp3;base64,${audio}`];
 }
 
