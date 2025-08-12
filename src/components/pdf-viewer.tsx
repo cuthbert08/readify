@@ -1,4 +1,3 @@
-
 'use client';
 
 import React, { useState } from 'react';
@@ -6,13 +5,10 @@ import { Document, Page, pdfjs } from 'react-pdf';
 import 'react-pdf/dist/esm/Page/AnnotationLayer.css';
 import 'react-pdf/dist/esm/Page/TextLayer.css';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, ArrowLeft, ArrowRight } from 'lucide-react';
-import { Button } from './ui/button';
+import { Loader2 } from 'lucide-react';
 
-// Set up the worker
-// This is the recommended approach for Next.js and other bundlers
-pdfjs.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjs.version}/pdf.worker.min.mjs`;
-
+// Set up the worker with the correct URL
+pdfjs.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjs.version}/pdf.worker.min.js`;
 
 type PdfViewerProps = {
   file: string;
@@ -24,12 +20,10 @@ const PdfViewer: React.FC<PdfViewerProps> = ({
     zoomLevel, 
 }) => {
   const [numPages, setNumPages] = useState<number | null>(null);
-  const [pageNumber, setPageNumber] = useState(1);
   const { toast } = useToast();
 
   const onDocumentLoadSuccess = ({ numPages }: { numPages: number }) => {
     setNumPages(numPages);
-    setPageNumber(1);
   };
 
   const onDocumentLoadError = (error: Error) => {
@@ -39,14 +33,6 @@ const PdfViewer: React.FC<PdfViewerProps> = ({
       title: 'Error loading PDF',
       description: error.message || 'Failed to load the document.',
     });
-  };
-
-  const goToPrevPage = () => {
-    setPageNumber((prevPageNumber) => Math.max(prevPageNumber - 1, 1));
-  };
-
-  const goToNextPage = () => {
-    setPageNumber((prevPageNumber) => Math.min(prevPageNumber + 1, numPages!));
   };
 
   return (
@@ -62,29 +48,20 @@ const PdfViewer: React.FC<PdfViewerProps> = ({
               <span>Loading document...</span>
             </div>
           }
-          className="flex justify-center"
+          className="flex flex-col items-center"
         >
-          <Page
-            pageNumber={pageNumber}
-            scale={zoomLevel}
-            renderTextLayer={true} // This enables text selection
-            renderAnnotationLayer={true}
-          />
-        </Document>
-
-        {numPages && (
-            <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-2 bg-card p-2 rounded-lg shadow-lg">
-                <Button onClick={goToPrevPage} disabled={pageNumber <= 1} variant="ghost" size="icon">
-                    <ArrowLeft />
-                </Button>
-                <p className="text-sm font-medium">
-                    Page {pageNumber} of {numPages}
-                </p>
-                <Button onClick={goToNextPage} disabled={pageNumber >= numPages} variant="ghost" size="icon">
-                    <ArrowRight />
-                </Button>
+          {/* Render all pages to enable scrolling */}
+          {numPages && Array.from(new Array(numPages), (el, index) => (
+            <div key={`page_${index + 1}`} className="my-2">
+              <Page
+                pageNumber={index + 1}
+                scale={zoomLevel}
+                renderTextLayer={true}
+                renderAnnotationLayer={true}
+              />
             </div>
-        )}
+          ))}
+        </Document>
       </div>
     </div>
   );

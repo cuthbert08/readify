@@ -84,6 +84,7 @@ async function generateAmazon(formattedText: string, voice: string): Promise<str
         body: JSON.stringify({
             text: formattedText,
             voiceId: voice,
+            engine: 'neural',
         }),
     });
 

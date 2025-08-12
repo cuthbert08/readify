@@ -37,6 +37,7 @@ async function handleAmazonPreview(voice: string) {
         body: JSON.stringify({
             text: 'Hello! This is a preview of my voice.',
             voiceId: voice,
+            engine: 'neural',
         }),
     });
 
