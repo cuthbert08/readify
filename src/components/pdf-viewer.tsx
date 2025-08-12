@@ -9,11 +9,8 @@ import { Skeleton } from './ui/skeleton';
 import { cn } from '@/lib/utils';
 import type { PDFDocumentProxy } from 'pdfjs-dist';
 
-// Use the local worker
-pdfjs.GlobalWorkerOptions.workerSrc = new URL(
-  'pdfjs-dist/build/pdf.worker.min.mjs',
-  import.meta.url,
-).toString();
+// Set up the worker from a CDN
+pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
 
 
 interface PdfViewerProps {
