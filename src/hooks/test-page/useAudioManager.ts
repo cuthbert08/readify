@@ -7,6 +7,9 @@ import { getAvailableVoices, AvailableVoice } from '@/ai/flows/voice-selection';
 import { previewSpeech } from '@/ai/flows/preview-speech';
 import { generateSpeech } from '@/ai/flows/generate-speech';
 import { saveDocument, Document } from '@/lib/db';
+import type { SpeechMark } from '@/ai/schemas';
+import type { Highlight } from '@/components/pdf-viewer';
+
 
 const IS_STAGING = true;
 
@@ -31,9 +34,12 @@ async function mergeAudio(audioDataUris: string[]): Promise<Blob> {
 type UseAudioManagerProps = {
     activeDoc: Document | null;
     documentText: string;
+    speechMarks: SpeechMark[];
+    setSpeechMarks: (marks: SpeechMark[]) => void;
+    setCurrentHighlight: (h: Highlight | null) => void;
 };
 
-export const useAudioManager = ({ activeDoc, documentText }: UseAudioManagerProps) => {
+export const useAudioManager = ({ activeDoc, documentText, speechMarks, setSpeechMarks, setCurrentHighlight }: UseAudioManagerProps) => {
     const { toast } = useToast();
     const [isSpeaking, setIsSpeaking] = useState(false);
     const [audioProgress, setAudioProgress] = useState(0);
@@ -117,8 +123,11 @@ export const useAudioManager = ({ activeDoc, documentText }: UseAudioManagerProp
             if (!uploadAudioResponse.ok) throw new Error('Audio Upload failed');
             const audioBlobResult = await uploadAudioResponse.json();
             const newAudioUrl = audioBlobResult.url;
-            const updatedDoc = await saveDocument({ id: activeDoc.id, audioUrl: newAudioUrl }, IS_STAGING);
+            const updatedDoc = await saveDocument({ id: activeDoc.id, audioUrl: newAudioUrl, speechMarks: result.speechMarks }, IS_STAGING);
+            
+            setSpeechMarks(result.speechMarks || []);
             setActiveDoc(updatedDoc);
+            
             if (audioRef.current) {
                 audioRef.current.src = newAudioUrl;
                 audioRef.current.load();
@@ -137,9 +146,24 @@ export const useAudioManager = ({ activeDoc, documentText }: UseAudioManagerProp
     const handleAudioTimeUpdate = () => {
         if (!audioRef.current) return;
         const currentTime = audioRef.current.currentTime;
+        const currentTimeMs = currentTime * 1000;
         setAudioCurrentTime(currentTime);
+
         if (audioDuration > 0) {
             setAudioProgress((currentTime / audioDuration) * 100);
+        }
+
+        if (speechMarks.length > 0) {
+            const currentWord = speechMarks.find(mark => mark.type === 'word' && currentTimeMs >= mark.time && currentTimeMs < (mark.time + (mark.end - mark.start) * 10)); // Heuristic for word duration
+            const currentSentence = speechMarks.find(mark => mark.type === 'sentence' && currentTimeMs >= mark.time && currentTimeMs < (mark.time + (mark.end - mark.start) * 20));
+            
+            if (currentWord) {
+                setCurrentHighlight({ type: 'word', start: currentWord.start, end: currentWord.end });
+            } else if (currentSentence) {
+                setCurrentHighlight({ type: 'sentence', start: currentSentence.start, end: currentSentence.end });
+            } else {
+                setCurrentHighlight(null);
+            }
         }
     };
 
@@ -191,7 +215,6 @@ export const useAudioManager = ({ activeDoc, documentText }: UseAudioManagerProp
         isSpeaking,
         setIsSpeaking,
         audioProgress,
-        setAudioProgress,
         audioDuration,
         setAudioDuration,
         audioCurrentTime,

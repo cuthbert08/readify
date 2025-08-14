@@ -5,6 +5,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { useToast } from "@/hooks/use-toast";
 import { getDocuments, saveDocument, deleteDocument, Document, getUserSession } from '@/lib/db';
 import { cleanPdfText } from '@/ai/flows/clean-text-flow';
+import type { SpeechMark } from '@/ai/schemas';
 
 const IS_STAGING = true;
 
@@ -13,6 +14,7 @@ export const useDocumentManager = () => {
     const [activeDoc, setActiveDoc] = useState<Document | null>(null);
     const [userDocuments, setUserDocuments] = useState<Document[]>([]);
     const [documentText, setDocumentText] = useState('');
+    const [speechMarks, setSpeechMarks] = useState<SpeechMark[]>([]);
     const [pdfZoomLevel, setPdfZoomLevel] = useState(1);
     const [isSavingZoom, setIsSavingZoom] = useState(false);
     const localPdfUrlRef = useRef<string | null>(null);
@@ -54,6 +56,7 @@ export const useDocumentManager = () => {
     const clearActiveDoc = (audioRef: React.RefObject<HTMLAudioElement>) => {
         setActiveDoc(null);
         setDocumentText('');
+        setSpeechMarks([]);
         if (audioRef.current) {
             audioRef.current.src = "";
         }
@@ -67,6 +70,7 @@ export const useDocumentManager = () => {
         clearActiveDoc(audioRef);
         setActiveDoc(doc);
         setDocumentText(doc.textContent || '');
+        setSpeechMarks(doc.speechMarks || []);
         setPdfZoomLevel(doc.zoomLevel);
         if (doc.audioUrl && audioRef.current) {
             audioRef.current.src = doc.audioUrl;
@@ -89,6 +93,7 @@ export const useDocumentManager = () => {
             pdfUrl: localUrl,
             textContent: '',
             audioUrl: null,
+            speechMarks: [],
             zoomLevel: 1,
             createdAt: new Date().toISOString(),
             chatHistory: [],
@@ -185,6 +190,8 @@ export const useDocumentManager = () => {
         setActiveDoc,
         documentText,
         setDocumentText,
+        speechMarks,
+        setSpeechMarks,
         userDocuments,
         setUserDocuments,
         pdfZoomLevel,

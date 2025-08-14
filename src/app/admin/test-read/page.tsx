@@ -14,7 +14,7 @@ import { Separator } from '@/components/ui/separator';
 import { cn } from '@/lib/utils';
 import { ThemeToggle } from '@/components/theme-toggle';
 import { ChatWindow } from '@/components/chat-window';
-import PdfViewer from '@/components/pdf-viewer';
+import PdfViewer, { type Highlight } from '@/components/pdf-viewer';
 import AudioSettings from '@/components/test-layout/AudioSettings';
 import AiTools from '@/components/test-layout/AiTools';
 import DocumentLibrary from '@/components/test-layout/DocumentLibrary';
@@ -26,6 +26,7 @@ import SpeechSynthesizer from '@/components/test-layout/SpeechSynthesizer';
 import { generateSpeech } from '@/ai/flows/generate-speech';
 import { useToast } from '@/hooks/use-toast';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import type { SpeechMark } from '@/ai/schemas';
 
 // Helper function to concatenate audio blobs
 async function mergeAudio(audioDataUris: string[]): Promise<Blob> {
@@ -51,6 +52,7 @@ export default function TestReadPage() {
   const [isFullScreen, setIsFullScreen] = useState(false);
   const [sidebarOrder, setSidebarOrder] = useState<string[]>(['upload', 'audio', 'ai', 'docs']);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const [currentHighlight, setCurrentHighlight] = useState<Highlight | null>(null);
 
   const { toast } = useToast();
 
@@ -71,6 +73,8 @@ export default function TestReadPage() {
     handleSaveZoom,
     clearActiveDoc,
     fetchUserDocuments,
+    speechMarks,
+    setSpeechMarks,
   } = useDocumentManager();
   
   const {
@@ -79,11 +83,9 @@ export default function TestReadPage() {
     isSpeaking,
     setIsSpeaking,
     audioProgress,
-    setAudioProgress,
     audioDuration,
     setAudioDuration,
     audioCurrentTime,
-    setAudioCurrentTime,
     availableVoices,
     selectedVoice,
     setSelectedVoice,
@@ -92,7 +94,6 @@ export default function TestReadPage() {
     playbackRate,
     setPlaybackRate,
     generationState,
-    setGenerationState,
     handlePlayPause,
     handleGenerateAudio,
     handleAudioTimeUpdate,
@@ -101,7 +102,7 @@ export default function TestReadPage() {
     handleForward,
     handleRewind,
     getProcessingMessage,
-  } = useAudioManager({ activeDoc, documentText });
+  } = useAudioManager({ activeDoc, documentText, speechMarks, setCurrentHighlight, setSpeechMarks });
   
   const {
     isAiDialogOpen,
@@ -160,6 +161,8 @@ export default function TestReadPage() {
           const audioUrl = URL.createObjectURL(mergedAudioBlob);
           localAudioUrlRef.current = audioUrl;
           setSynthesisAudioUrl(audioUrl);
+      } else {
+        toast({ variant: "destructive", title: "Synthesis Error", description: "Could not generate audio. No data received." });
       }
     } catch (error) {
         const errorMessage = error instanceof Error ? error.message : "An unknown error occurred";
@@ -280,6 +283,8 @@ export default function TestReadPage() {
           <PdfViewer
             file={activeDoc.pdfUrl}
             zoomLevel={pdfZoomLevel}
+            highlight={currentHighlight}
+            documentText={documentText}
           />
       );
     }
@@ -431,7 +436,10 @@ export default function TestReadPage() {
           ref={audioRef} 
           onPlay={() => setIsSpeaking(true)}
           onPause={() => setIsSpeaking(false)}
-          onEnded={() => setIsSpeaking(false)} 
+          onEnded={() => {
+            setIsSpeaking(false);
+            setCurrentHighlight(null);
+          }}
           onLoadedMetadata={(e) => setAudioDuration(e.currentTarget.duration)}
           onTimeUpdate={handleAudioTimeUpdate}
           hidden 
@@ -453,5 +461,3 @@ export default function TestReadPage() {
     </TooltipProvider>
   );
 }
-
-    
