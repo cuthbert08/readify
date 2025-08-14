@@ -20,7 +20,9 @@ const UploadTool: React.FC<UploadToolProps> = ({ onUploadClick, onMoveUp, onMove
             <div className="p-2 text-sm font-semibold flex items-center justify-between text-muted-foreground">
                 <div className="flex items-center gap-2">
                     <UploadCloud />
-                    Upload Document
+                     <button onClick={onUploadClick} className="flex-1 text-left hover:underline">
+                        Upload Document
+                    </button>
                 </div>
                 <div className='flex items-center'>
                     <Button variant="ghost" size="icon" className="h-6 w-6" onClick={onMoveUp} disabled={!canMoveUp}>
@@ -31,12 +33,6 @@ const UploadTool: React.FC<UploadToolProps> = ({ onUploadClick, onMoveUp, onMove
                     </Button>
                 </div>
             </div>
-            <SidebarMenuItem>
-                <SidebarMenuButton onClick={onUploadClick}>
-                    <UploadCloud />
-                    Upload New Document
-                </SidebarMenuButton>
-            </SidebarMenuItem>
         </div>
     );
 };
