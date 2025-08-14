@@ -34,7 +34,7 @@ const DocumentLibrary: React.FC<DocumentLibraryProps> = ({
     canMoveUp,
     canMoveDown
 }) => {
-    const [isOpen, setIsOpen] = useState(true);
+    const [isOpen, setIsOpen] = useState(false);
 
     return (
         <TooltipProvider>

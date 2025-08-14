@@ -22,7 +22,7 @@ type AiToolsProps = {
 };
 
 const AiTools: React.FC<AiToolsProps> = ({ onAiAction, onChatOpen, documentText, activeDoc, onMoveUp, onMoveDown, canMoveUp, canMoveDown }) => {
-    const [isOpen, setIsOpen] = useState(true);
+    const [isOpen, setIsOpen] = useState(false);
     
     return (
         <Collapsible open={isOpen} onOpenChange={setIsOpen}>
