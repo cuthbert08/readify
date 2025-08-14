@@ -4,7 +4,7 @@ import { getSession } from '@/lib/session';
 
 const protectedRoutes = ['/read', '/profile'];
 const publicRoutes = ['/', '/welcome'];
-const adminRoutes = ['/admin'];
+const adminRoutes = ['/admin']; // This now includes /admin and /admin/*
 
 export async function middleware(req: NextRequest) {
   const path = req.nextUrl.pathname;
@@ -21,7 +21,8 @@ export async function middleware(req: NextRequest) {
   // If the user is logged in
   if (session?.userId) {
     // If they haven't set a username, force them to the welcome page
-    if (!session.username && path !== '/welcome' && path !== '/api/auth/logout') {
+    // Allow access to /api for actions like setting the username
+    if (!session.username && path !== '/welcome' && !path.startsWith('/api')) {
       return NextResponse.redirect(new URL('/welcome', req.nextUrl));
     }
     

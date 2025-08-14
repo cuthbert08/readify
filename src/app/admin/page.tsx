@@ -3,7 +3,7 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Users, FileText, Trash2, LogOut, PlusCircle, User, File } from 'lucide-react';
+import { Users, FileText, Trash2, LogOut, PlusCircle, User, File, TestTube2 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
@@ -96,6 +96,7 @@ export default function AdminPage() {
        <header className="sticky top-0 z-30 flex h-14 items-center justify-between gap-4 border-b bg-background px-4 sm:static sm:h-auto sm:border-0 sm:bg-transparent sm:px-6">
           <h1 className="text-2xl font-headline text-primary">Admin Panel</h1>
           <div className="flex items-center gap-2">
+            <Button onClick={() => router.push('/admin/test-read')} variant='secondary'><TestTube2 className='mr-2'/>Go to Test App</Button>
             <Button onClick={() => router.push('/read')} variant="outline">Go to App</Button>
             <Button onClick={handleLogout} variant="ghost" size="icon">
                 <LogOut className="h-5 w-5"/>

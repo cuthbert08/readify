@@ -51,9 +51,13 @@ export interface UserSession extends SessionPayload {
     email: string;
 }
 
+// Helper function to get the correct key prefix
+const getKeyPrefix = (isStaging: boolean) => (isStaging ? 'readify:staging' : 'readify');
+
 export async function getUserSession(): Promise<UserSession | null> {
   const session = await getSession();
   if (session?.userId) {
+    // User data is not staged, so we always fetch from production keys.
     const user: User | null = await kv.get(`readify:user:id:${session.userId}`);
     if (user) {
         return {
@@ -66,18 +70,20 @@ export async function getUserSession(): Promise<UserSession | null> {
   return null;
 }
 
-export async function saveDocument(docData: Partial<Document>): Promise<Document> {
+export async function saveDocument(docData: Partial<Document>, isStaging: boolean = false): Promise<Document> {
   const session = await getSession();
   if (!session?.userId || !session.username) {
     throw new Error('Authentication and username required.');
   }
   const userId = session.userId;
+  const prefix = getKeyPrefix(isStaging);
 
   let docId = docData.id;
-  const userDocListKey = `readify:user:${userId}:docs`;
+  const userDocListKey = `${prefix}:user:${userId}:docs`;
 
   if (docId) {
-    const existingDocRaw: Document | null = await kv.get(`readify:doc:${docId}`);
+    const docKey = `${prefix}:doc:${docId}`;
+    const existingDocRaw: Document | null = await kv.get(docKey);
     if (!existingDocRaw) {
         throw new Error('Document not found.');
     }
@@ -90,7 +96,7 @@ export async function saveDocument(docData: Partial<Document>): Promise<Document
       ...docData,
       id: docId, // Ensure id is set correctly
     };
-    await kv.set(`readify:doc:${docId}`, updatedDoc);
+    await kv.set(docKey, updatedDoc);
     return updatedDoc;
 
   } else {
@@ -110,8 +116,9 @@ export async function saveDocument(docData: Partial<Document>): Promise<Document
       chatHistory: [],
     };
     
+    const docKey = `${prefix}:doc:${docId}`;
     const pipeline = kv.pipeline();
-    pipeline.set(`readify:doc:${docId}`, newDoc);
+    pipeline.set(docKey, newDoc);
     pipeline.lpush(userDocListKey, docId);
     await pipeline.exec();
 
@@ -119,13 +126,14 @@ export async function saveDocument(docData: Partial<Document>): Promise<Document
   }
 }
 
-export async function getDocuments(): Promise<Document[]> {
+export async function getDocuments(isStaging: boolean = false): Promise<Document[]> {
   const session = await getSession();
   if (!session?.userId) {
     return [];
   }
   const userId = session.userId;
-  const userDocListKey = `readify:user:${userId}:docs`;
+  const prefix = getKeyPrefix(isStaging);
+  const userDocListKey = `${prefix}:user:${userId}:docs`;
 
   const docIds = await kv.lrange<string[]>(userDocListKey, 0, -1);
   if (docIds.length === 0) {
@@ -137,7 +145,7 @@ export async function getDocuments(): Promise<Document[]> {
     return [];
   }
 
-  const docKeys = validDocIds.map(id => `readify:doc:${id}`);
+  const docKeys = validDocIds.map(id => `${prefix}:doc:${id}`);
   const docs = await kv.mget<Document[]>(...docKeys);
 
   return docs
@@ -145,14 +153,15 @@ export async function getDocuments(): Promise<Document[]> {
     .sort((a,b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 }
 
-export async function deleteDocument(docId: string): Promise<{ success: boolean, message?: string }> {
+export async function deleteDocument(docId: string, isStaging: boolean = false): Promise<{ success: boolean, message?: string }> {
     const session = await getSession();
     if (!session?.userId) {
         throw new Error('Authentication required.');
     }
+    const prefix = getKeyPrefix(isStaging);
 
     try {
-        const docKey = `readify:doc:${docId}`;
+        const docKey = `${prefix}:doc:${docId}`;
         const doc: Document | null = await kv.get(docKey);
 
         if (!doc) {
@@ -176,7 +185,7 @@ export async function deleteDocument(docId: string): Promise<{ success: boolean,
         // Delete from KV
         const pipeline = kv.pipeline();
         pipeline.del(docKey);
-        pipeline.lrem(`readify:user:${doc.userId}:docs`, 1, docId);
+        pipeline.lrem(`${prefix}:user:${doc.userId}:docs`, 1, docId);
         await pipeline.exec();
         
         return { success: true };
@@ -187,13 +196,13 @@ export async function deleteDocument(docId: string): Promise<{ success: boolean,
     }
 }
 
-export async function clearChatHistory(docId: string): Promise<Document> {
+export async function clearChatHistory(docId: string, isStaging: boolean = false): Promise<Document> {
     const session = await getSession();
     if (!session?.userId) {
         throw new Error('Authentication required.');
     }
-
-    const docKey = `readify:doc:${docId}`;
+    const prefix = getKeyPrefix(isStaging);
+    const docKey = `${prefix}:doc:${docId}`;
     const doc: Document | null = await kv.get(docKey);
 
     if (!doc) {
