@@ -4,11 +4,9 @@
 import { useState, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { UploadCloud, BarChart, TestTube2 } from 'lucide-react';
-
 import { useDocumentManager } from '@/hooks/test-page/useDocumentManager';
 import { useAudioManager } from '@/hooks/test-page/useAudioManager';
 import { useAiFeatures } from '@/hooks/test-page/useAiFeatures';
-
 import AudioPlayer from '@/components/audio-player';
 import { Sidebar, SidebarHeader, SidebarFooter, SidebarContent } from '@/components/ui/sidebar';
 import AiDialog from '@/components/ai-dialog';
@@ -27,6 +25,7 @@ import { Button } from '@/components/ui/button';
 import SpeechSynthesizer from '@/components/test-layout/SpeechSynthesizer';
 import { generateSpeech } from '@/ai/flows/generate-speech';
 import { useToast } from '@/hooks/use-toast';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
 // Helper function to concatenate audio blobs
 async function mergeAudio(audioDataUris: string[]): Promise<Blob> {
@@ -50,7 +49,7 @@ async function mergeAudio(audioDataUris: string[]): Promise<Blob> {
 export default function TestReadPage() {
   const router = useRouter();
   const [isFullScreen, setIsFullScreen] = useState(false);
-  const [sidebarOrder, setSidebarOrder] = useState<string[]>(['upload', 'audio', 'ai', 'docs', 'synth']);
+  const [sidebarOrder, setSidebarOrder] = useState<string[]>(['upload', 'audio', 'ai', 'docs']);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const { toast } = useToast();
@@ -273,27 +272,6 @@ export default function TestReadPage() {
         />
       </div>
     ),
-    synth: (key: string, index: number) => (
-        <div key={key}>
-            <Separator className="my-2" />
-            <SpeechSynthesizer
-                text={synthesisText}
-                onTextChange={setSynthesisText}
-                availableVoices={availableVoices}
-                selectedVoice={synthesisVoice}
-                onSelectedVoiceChange={setSynthesisVoice}
-                speakingRate={synthesisRate}
-                onSpeakingRateChange={setSynthesisRate}
-                isSynthesizing={isSynthesizing}
-                onSynthesize={handleSynthesize}
-                audioUrl={synthesisAudioUrl}
-                onMoveUp={() => handleMoveComponent(index, 'up')}
-                onMoveDown={() => handleMoveComponent(index, 'down')}
-                canMoveUp={index > 0}
-                canMoveDown={index < sidebarOrder.length - 1}
-            />
-        </div>
-    )
   };
 
   const renderContent = () => {
@@ -315,22 +293,53 @@ export default function TestReadPage() {
             handleFileUpload(e.dataTransfer.files);
           }}
         >
-            <div className="text-center p-8 border-2 border-dashed border-muted-foreground/30 rounded-xl max-w-lg w-full">
-                <UploadCloud className="mx-auto h-16 w-16 text-muted-foreground/50" />
-                <h3 className="mt-4 text-2xl font-headline">Prepare a New Document</h3>
-                <p className="mt-2 text-sm text-muted-foreground">
-                    Drag and drop a PDF file here, or click the button below to select one.
-                </p>
-                <Button className="mt-6" onClick={handleClearActiveDocAndUpload}>
-                    Select PDF File
-                </Button>
-                <input
-                    type="file"
-                    ref={fileInputRef}
-                    onChange={(e) => handleFileUpload(e.target.files)}
-                    accept="application/pdf"
-                    className="hidden"
-                />
+            <div className="text-center max-w-lg w-full">
+              <Tabs defaultValue="upload" className="w-full">
+                  <TabsList className="grid w-full grid-cols-2">
+                      <TabsTrigger value="upload">Upload PDF</TabsTrigger>
+                      <TabsTrigger value="synth">Synthesize Speech</TabsTrigger>
+                  </TabsList>
+                  <TabsContent value="upload">
+                      <div className="p-8 border-2 border-dashed border-muted-foreground/30 rounded-xl mt-4">
+                          <UploadCloud className="mx-auto h-16 w-16 text-muted-foreground/50" />
+                          <h3 className="mt-4 text-2xl font-headline">Read a Document</h3>
+                          <p className="mt-2 text-sm text-muted-foreground">
+                              Click or drag & drop a PDF file to start reading
+                          </p>
+                          <Button className="mt-6" onClick={handleClearActiveDocAndUpload}>
+                              Select PDF File
+                          </Button>
+                          <input
+                              type="file"
+                              ref={fileInputRef}
+                              onChange={(e) => handleFileUpload(e.target.files)}
+                              accept="application/pdf"
+                              className="hidden"
+                          />
+                      </div>
+                  </TabsContent>
+                  <TabsContent value="synth">
+                      <div className="p-4 border-2 border-dashed border-muted-foreground/30 rounded-xl mt-4">
+                           <SpeechSynthesizer
+                              text={synthesisText}
+                              onTextChange={setSynthesisText}
+                              availableVoices={availableVoices}
+                              selectedVoice={synthesisVoice}
+                              onSelectedVoiceChange={setSynthesisVoice}
+                              speakingRate={synthesisRate}
+                              onSpeakingRateChange={setSynthesisRate}
+                              isSynthesizing={isSynthesizing}
+                              onSynthesize={handleSynthesize}
+                              audioUrl={synthesisAudioUrl}
+                              // Move props are not needed here
+                              onMoveUp={() => {}}
+                              onMoveDown={() => {}}
+                              canMoveUp={false}
+                              canMoveDown={false}
+                          />
+                      </div>
+                  </TabsContent>
+              </Tabs>
             </div>
         </div>
     );
@@ -444,7 +453,5 @@ export default function TestReadPage() {
     </TooltipProvider>
   );
 }
-
-    
 
     
