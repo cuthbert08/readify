@@ -10,7 +10,7 @@
  */
 import 'dotenv/config';
 import { ai } from '@/ai/genkit';
-import { GenerateSpeechInputSchema, GenerateSpeechOutputSchema, GenerateSpeechInput } from '@/ai/schemas';
+import { GenerateSpeechInputSchema, GenerateSpeechOutputSchema, GenerateSpeechInput, GenerateSpeechOutput } from '@/ai/schemas';
 import { formatTextForSpeech } from './format-text-for-speech';
 
 // Function to split text into chunks without breaking sentences
@@ -90,7 +90,24 @@ async function generateAmazon(formattedText: string, voice: string): Promise<str
     if (!response.ok) {
         const errorBody = await response.text();
         console.error("Amazon Polly Lambda Error:", errorBody);
-        throw new Error(`Failed to get audio from Amazon Polly: ${errorBody}`);
+
+        let errorMessage = 'An unknown error occurred with the audio service.';
+        try {
+            const errorJson = JSON.parse(errorBody);
+            // If the lambda returns a specific error message, use it.
+            if (errorJson.error) {
+                errorMessage = errorJson.error;
+            } else if (typeof errorJson === 'string') {
+                errorMessage = errorJson;
+            }
+        } catch (e) {
+            // If parsing as JSON fails, use the raw text, but truncate it
+            // to avoid leaking long stack traces or sensitive info.
+            errorMessage = errorBody.substring(0, 100);
+        }
+
+        // Throw a cleaner error message. The client will display this.
+        throw new Error(errorMessage);
     }
 
     const { audio } = await response.json();
@@ -106,7 +123,7 @@ async function generateAmazon(formattedText: string, voice: string): Promise<str
 // This function can be directly called from client components as a Server Action.
 export async function generateSpeech(
   input: GenerateSpeechInput
-): Promise<GenerateSpeechOutputSchema> {
+): Promise<GenerateSpeechOutput> {
     
     if (!input.text || !input.text.trim()) {
         throw new Error("Input text cannot be empty.");

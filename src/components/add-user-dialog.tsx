@@ -86,7 +86,7 @@ export default function AddUserDialog({ isOpen, onClose, onUserAdded }: AddUserD
         <DialogHeader>
           <DialogTitle>Add New User</DialogTitle>
           <DialogDescription>
-            An invitation will be sent to the user's email to set up their account.
+            An invitation will be sent to the user&apos;s email to set up their account.
           </DialogDescription>
         </DialogHeader>
         <Form {...form}>

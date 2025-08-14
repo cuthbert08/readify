@@ -19,7 +19,7 @@ interface WelcomeEmailProps {
 export const WelcomeEmail = ({ name, setupLink }: WelcomeEmailProps) => (
   <Html>
     <Head />
-    <Preview>Welcome to Readify! Let's get your account set up.</Preview>
+    <Preview>Welcome to Readify! Let&apos;s get your account set up.</Preview>
     <Body style={main}>
       <Container style={container}>
         <Heading style={h1}>Welcome to Readify</Heading>
