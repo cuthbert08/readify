@@ -24,12 +24,35 @@ import UserPanel from '@/components/test-layout/UserPanel';
 import UploadTool from '@/components/test-layout/UploadTool';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { Button } from '@/components/ui/button';
+import SpeechSynthesizer from '@/components/test-layout/SpeechSynthesizer';
+import { generateSpeech } from '@/ai/flows/generate-speech';
+
+// Helper function to concatenate audio blobs
+async function mergeAudio(audioDataUris: string[]): Promise<Blob> {
+    const audioBuffers = await Promise.all(
+        audioDataUris.map(async (uri) => {
+            const response = await fetch(uri);
+            return response.arrayBuffer();
+        })
+    );
+    const totalLength = audioBuffers.reduce((acc, buffer) => acc + buffer.byteLength, 0);
+    const merged = new Uint8Array(totalLength);
+    let offset = 0;
+    audioBuffers.forEach((buffer) => {
+        merged.set(new Uint8Array(buffer), offset);
+        offset += buffer.byteLength;
+    });
+    return new Blob([merged], { type: 'audio/mp3' });
+}
+
 
 export default function TestReadPage() {
   const router = useRouter();
   const [isFullScreen, setIsFullScreen] = useState(false);
-  const [sidebarOrder, setSidebarOrder] = useState<string[]>(['upload', 'audio', 'ai', 'docs']);
+  const [sidebarOrder, setSidebarOrder] = useState<string[]>(['upload', 'audio', 'ai', 'docs', 'synth']);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+
+  const { toast } = useToast();
 
   const {
     activeDoc,
@@ -56,9 +79,11 @@ export default function TestReadPage() {
     isSpeaking,
     setIsSpeaking,
     audioProgress,
+    setAudioProgress,
     audioDuration,
     setAudioDuration,
     audioCurrentTime,
+    setAudioCurrentTime,
     availableVoices,
     selectedVoice,
     setSelectedVoice,
@@ -67,6 +92,7 @@ export default function TestReadPage() {
     playbackRate,
     setPlaybackRate,
     generationState,
+    setGenerationState,
     handlePlayPause,
     handleGenerateAudio,
     handleAudioTimeUpdate,
@@ -103,6 +129,47 @@ export default function TestReadPage() {
       setActiveDoc: setActiveDoc
   });
   
+  // State for the standalone synthesizer
+  const [synthesisText, setSynthesisText] = useState('');
+  const [synthesisVoice, setSynthesisVoice] = useState('openai/alloy');
+  const [synthesisRate, setSynthesisRate] = useState(1.0);
+  const [isSynthesizing, setIsSynthesizing] = useState(false);
+  const [synthesisAudioUrl, setSynthesisAudioUrl] = useState<string | null>(null);
+  const localAudioUrlRef = useRef<string | null>(null);
+
+  const handleSynthesize = async () => {
+    if (!synthesisText.trim()) {
+        toast({ variant: "destructive", title: "No Text", description: "Please enter some text to synthesize." });
+        return;
+    }
+    setIsSynthesizing(true);
+    setSynthesisAudioUrl(null);
+    if (localAudioUrlRef.current) {
+        URL.revokeObjectURL(localAudioUrlRef.current);
+        localAudioUrlRef.current = null;
+    }
+    try {
+      const result = await generateSpeech({
+          text: synthesisText,
+          voice: synthesisVoice,
+          speakingRate: synthesisRate,
+      });
+        
+      if (result.audioDataUris && result.audioDataUris.length > 0) {
+          const mergedAudioBlob = await mergeAudio(result.audioDataUris);
+          const audioUrl = URL.createObjectURL(mergedAudioBlob);
+          localAudioUrlRef.current = audioUrl;
+          setSynthesisAudioUrl(audioUrl);
+      }
+    } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : "An unknown error occurred";
+        toast({ variant: "destructive", title: "Synthesis Error", description: `Could not generate audio: ${errorMessage}` });
+    } finally {
+        setIsSynthesizing(false);
+    }
+  };
+
+
   const handleLogout = async () => {
     await fetch('/api/auth/logout', { method: 'POST' });
     router.push('/');
@@ -204,6 +271,27 @@ export default function TestReadPage() {
         />
       </div>
     ),
+    synth: (key: string, index: number) => (
+        <div key={key}>
+            <Separator className="my-2" />
+            <SpeechSynthesizer
+                text={synthesisText}
+                onTextChange={setSynthesisText}
+                availableVoices={availableVoices}
+                selectedVoice={synthesisVoice}
+                onSelectedVoiceChange={setSynthesisVoice}
+                speakingRate={synthesisRate}
+                onSpeakingRateChange={setSynthesisRate}
+                isSynthesizing={isSynthesizing}
+                onSynthesize={handleSynthesize}
+                audioUrl={synthesisAudioUrl}
+                onMoveUp={() => handleMoveComponent(index, 'up')}
+                onMoveDown={() => handleMoveComponent(index, 'down')}
+                canMoveUp={index > 0}
+                canMoveDown={index < sidebarOrder.length - 1}
+            />
+        </div>
+    )
   };
 
   const renderContent = () => {
@@ -354,3 +442,4 @@ export default function TestReadPage() {
     </TooltipProvider>
   );
 }
+
