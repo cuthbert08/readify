@@ -4,7 +4,7 @@
 import React from 'react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Button } from '@/components/ui/button';
-import { Library, PlusCircle, FileText, Cloud, Mic, Loader2, Trash2 } from 'lucide-react';
+import { Library, PlusCircle, FileText, Cloud, Mic, Loader2, Trash2, ArrowUp, ArrowDown } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { type Document } from '@/lib/db';
 
@@ -16,6 +16,10 @@ type DocumentLibraryProps = {
     onSelectDocument: (doc: Document) => void;
     onGenerateAudio: () => void;
     onDeleteDocument: (docId: string | null) => void;
+    onMoveUp: () => void;
+    onMoveDown: () => void;
+    canMoveUp: boolean;
+    canMoveDown: boolean;
 };
 
 const DocumentLibrary: React.FC<DocumentLibraryProps> = ({
@@ -25,7 +29,11 @@ const DocumentLibrary: React.FC<DocumentLibraryProps> = ({
     onNewDocument,
     onSelectDocument,
     onGenerateAudio,
-    onDeleteDocument
+    onDeleteDocument,
+    onMoveUp,
+    onMoveDown,
+    canMoveUp,
+    canMoveDown
 }) => {
     return (
         <TooltipProvider>
@@ -35,16 +43,26 @@ const DocumentLibrary: React.FC<DocumentLibraryProps> = ({
                         <Library />
                         My Test Documents
                     </div>
-                    <Tooltip>
-                        <TooltipTrigger asChild>
-                            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={onNewDocument}>
-                                <PlusCircle className="h-5 w-5" />
+                    <div className="flex items-center">
+                        <Tooltip>
+                            <TooltipTrigger asChild>
+                                <Button variant="ghost" size="icon" className="h-7 w-7" onClick={onNewDocument}>
+                                    <PlusCircle className="h-5 w-5" />
+                                </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                                <p>New Document</p>
+                            </TooltipContent>
+                        </Tooltip>
+                         <div className='flex items-center'>
+                            <Button variant="ghost" size="icon" className="h-6 w-6" onClick={onMoveUp} disabled={!canMoveUp}>
+                                <ArrowUp className="h-4 w-4" />
                             </Button>
-                        </TooltipTrigger>
-                        <TooltipContent>
-                            <p>New Document</p>
-                        </TooltipContent>
-                    </Tooltip>
+                            <Button variant="ghost" size="icon" className="h-6 w-6" onClick={onMoveDown} disabled={!canMoveDown}>
+                                <ArrowDown className="h-4 w-4" />
+                            </Button>
+                        </div>
+                    </div>
                 </div>
                 <div className="px-2">
                     {documents.map((doc) => (

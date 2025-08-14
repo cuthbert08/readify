@@ -6,7 +6,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue, SelectGr
 import { Label } from '@/components/ui/label';
 import { Slider } from '@/components/ui/slider';
 import { Button } from '@/components/ui/button';
-import { Settings, Volume2 } from 'lucide-react';
+import { Settings, Volume2, ArrowUp, ArrowDown } from 'lucide-react';
 import { type AvailableVoice } from '@/ai/flows/voice-selection';
 
 type AudioSettingsProps = {
@@ -18,6 +18,10 @@ type AudioSettingsProps = {
     isSpeaking: boolean;
     generationState: 'idle' | 'generating' | 'error';
     onPreviewVoice: (voice: string) => void;
+    onMoveUp: () => void;
+    onMoveDown: () => void;
+    canMoveUp: boolean;
+    canMoveDown: boolean;
 };
 
 const AudioSettings: React.FC<AudioSettingsProps> = ({
@@ -28,7 +32,11 @@ const AudioSettings: React.FC<AudioSettingsProps> = ({
     onSpeakingRateChange,
     isSpeaking,
     generationState,
-    onPreviewVoice
+    onPreviewVoice,
+    onMoveUp,
+    onMoveDown,
+    canMoveUp,
+    canMoveDown
 }) => {
     const groupedVoices = useMemo(() => {
         return availableVoices.reduce((acc, voice) => {
@@ -43,9 +51,19 @@ const AudioSettings: React.FC<AudioSettingsProps> = ({
 
     return (
         <div>
-            <div className="p-2 text-sm font-semibold flex items-center gap-2 text-muted-foreground">
-                <Settings />
-                Audio Settings
+            <div className="p-2 text-sm font-semibold flex items-center justify-between text-muted-foreground">
+                <div className="flex items-center gap-2">
+                    <Settings />
+                    Audio Settings
+                </div>
+                <div className='flex items-center'>
+                    <Button variant="ghost" size="icon" className="h-6 w-6" onClick={onMoveUp} disabled={!canMoveUp}>
+                        <ArrowUp className="h-4 w-4" />
+                    </Button>
+                    <Button variant="ghost" size="icon" className="h-6 w-6" onClick={onMoveDown} disabled={!canMoveDown}>
+                        <ArrowDown className="h-4 w-4" />
+                    </Button>
+                </div>
             </div>
             <div className="p-2 space-y-4">
                 <div className='space-y-2'>

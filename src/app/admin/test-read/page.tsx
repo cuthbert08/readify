@@ -100,6 +100,8 @@ export default function TestReadPage() {
   const [pdfZoomLevel, setPdfZoomLevel] = useState(1);
   const [isSavingZoom, setIsSavingZoom] = useState(false);
 
+  const [sidebarOrder, setSidebarOrder] = useState<string[]>(['audio', 'ai', 'docs']);
+
 
   const { toast } = useToast();
   const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -627,6 +629,68 @@ export default function TestReadPage() {
     }
   }
 
+  const handleMoveComponent = (index: number, direction: 'up' | 'down') => {
+    const newOrder = [...sidebarOrder];
+    const newIndex = direction === 'up' ? index - 1 : index + 1;
+    [newOrder[index], newOrder[newIndex]] = [newOrder[newIndex], newOrder[index]];
+    setSidebarOrder(newOrder);
+  };
+
+  const sidebarComponents = {
+    audio: (key: string, index: number) => (
+      <div key={key}>
+        <Separator className="my-2" />
+        <AudioSettings
+          availableVoices={availableVoices}
+          selectedVoice={selectedVoice}
+          onSelectedVoiceChange={setSelectedVoice}
+          speakingRate={speakingRate}
+          onSpeakingRateChange={setSpeakingRate}
+          isSpeaking={isSpeaking}
+          generationState={generationState}
+          onPreviewVoice={handlePreviewVoice}
+          onMoveUp={() => handleMoveComponent(index, 'up')}
+          onMoveDown={() => handleMoveComponent(index, 'down')}
+          canMoveUp={index > 0}
+          canMoveDown={index < sidebarOrder.length - 1}
+        />
+      </div>
+    ),
+    ai: (key: string, index: number) => (
+      <div key={key}>
+        <Separator className="my-2" />
+        <AiTools
+          onAiAction={handleAiAction}
+          onChatOpen={() => setIsChatOpen(true)}
+          documentText={documentText}
+          activeDoc={activeDoc}
+          onMoveUp={() => handleMoveComponent(index, 'up')}
+          onMoveDown={() => handleMoveComponent(index, 'down')}
+          canMoveUp={index > 0}
+          canMoveDown={index < sidebarOrder.length - 1}
+        />
+      </div>
+    ),
+    docs: (key: string, index: number) => (
+      <div key={key}>
+        <Separator className="my-2" />
+        <DocumentLibrary
+          documents={userDocuments}
+          activeDocId={activeDoc?.id || null}
+          generationState={generationState}
+          onNewDocument={handleNewDocumentClick}
+          onSelectDocument={handleSelectDocument}
+          onGenerateAudio={handleGenerateAudio}
+          onDeleteDocument={handleDeleteDocument}
+          onMoveUp={() => handleMoveComponent(index, 'up')}
+          onMoveDown={() => handleMoveComponent(index, 'down')}
+          canMoveUp={index > 0}
+          canMoveDown={index < sidebarOrder.length - 1}
+        />
+      </div>
+    ),
+  };
+
 
   const renderContent = () => {
     if (activeDoc) {
@@ -694,34 +758,7 @@ export default function TestReadPage() {
                 </div>
             </SidebarHeader>
             <SidebarContent>
-                <Separator className="my-2" />
-                <AudioSettings 
-                    availableVoices={availableVoices}
-                    selectedVoice={selectedVoice}
-                    onSelectedVoiceChange={setSelectedVoice}
-                    speakingRate={speakingRate}
-                    onSpeakingRateChange={setSpeakingRate}
-                    isSpeaking={isSpeaking}
-                    generationState={generationState}
-                    onPreviewVoice={handlePreviewVoice}
-                />
-                <Separator className="my-2" />
-                <AiTools 
-                    onAiAction={handleAiAction}
-                    onChatOpen={() => setIsChatOpen(true)}
-                    documentText={documentText}
-                    activeDoc={activeDoc}
-                />
-                <Separator className="my-2" />
-                <DocumentLibrary 
-                    documents={userDocuments}
-                    activeDocId={activeDoc?.id || null}
-                    generationState={generationState}
-                    onNewDocument={handleNewDocumentClick}
-                    onSelectDocument={handleSelectDocument}
-                    onGenerateAudio={handleGenerateAudio}
-                    onDeleteDocument={handleDeleteDocument}
-                />
+                {sidebarOrder.map((key, index) => sidebarComponents[key as keyof typeof sidebarComponents](key, index))}
             </SidebarContent>
             <SidebarFooter>
                 <UserPanel 
