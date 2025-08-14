@@ -32,8 +32,9 @@ import { ChatWindow } from '@/components/chat-window';
 import { generateQuizFeedback } from '@/ai/flows/quiz-feedback-flow';
 import { cleanPdfText } from '@/ai/flows/clean-text-flow';
 import { generateSpeech } from '@/ai/flows/generate-speech';
-import PdfViewer from '@/components/pdf-viewer';
+import PdfViewer, { Highlight } from '@/components/pdf-viewer';
 import type { PDFDocumentProxy } from 'pdfjs-dist';
+import type { SpeechMark } from '@/ai/schemas';
 
 type GenerationState = 'idle' | 'generating' | 'error';
 type ActiveDocument = Document;
@@ -66,6 +67,8 @@ export default function ReadPage() {
   const [activeDoc, setActiveDoc] = useState<ActiveDocument | null>(null);
   
   const [documentText, setDocumentText] = useState('');
+  const [speechMarks, setSpeechMarks] = useState<SpeechMark[]>([]);
+  const [currentHighlight, setCurrentHighlight] = useState<Highlight | null>(null);
 
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [audioProgress, setAudioProgress] = useState(0);
@@ -175,6 +178,8 @@ export default function ReadPage() {
   const clearActiveDoc = () => {
     setActiveDoc(null);
     setDocumentText('');
+    setSpeechMarks([]);
+    setCurrentHighlight(null);
     setIsChatOpen(false);
     if (audioRef.current) {
         audioRef.current.src = "";
@@ -199,6 +204,7 @@ export default function ReadPage() {
     setAiQuizOutput(null);
     setAiGlossaryOutput(null);
     setPdfZoomLevel(doc.zoomLevel);
+    setSpeechMarks(doc.speechMarks || []);
     
     // Fetch text if it's not already loaded or empty
     if (!doc.textContent) {
@@ -276,8 +282,10 @@ export default function ReadPage() {
         const updatedDoc = await saveDocument({
             id: activeDoc.id,
             audioUrl: newAudioUrl,
+            speechMarks: result.speechMarks || null,
         });
-
+        
+        setSpeechMarks(result.speechMarks || []);
         setActiveDoc(updatedDoc);
         if (audioRef.current) {
             audioRef.current.src = newAudioUrl;
@@ -321,11 +329,24 @@ export default function ReadPage() {
 
   const handleAudioTimeUpdate = () => {
       if (!audioRef.current) return;
-      const currentTime = audioRef.current.currentTime;
-      setAudioCurrentTime(currentTime);
+      const currentTimeMs = audioRef.current.currentTime * 1000;
+      setAudioCurrentTime(audioRef.current.currentTime);
 
       if (audioDuration > 0) {
-          setAudioProgress((currentTime / audioDuration) * 100);
+          setAudioProgress((audioRef.current.currentTime / audioDuration) * 100);
+      }
+
+      if (speechMarks.length > 0) {
+        const currentWord = speechMarks.find(mark => mark.type === 'word' && currentTimeMs >= mark.time && currentTimeMs < (mark.time + (mark.end - mark.start) * 10)); // Heuristic for word duration
+        const currentSentence = speechMarks.find(mark => mark.type === 'sentence' && currentTimeMs >= mark.time && currentTimeMs < (mark.time + (mark.end - mark.start) * 20));
+        
+        if (currentWord) {
+            setCurrentHighlight({ type: 'word', start: currentWord.start, end: currentWord.end });
+        } else if (currentSentence) {
+            setCurrentHighlight({ type: 'sentence', start: currentSentence.start, end: currentSentence.end });
+        } else {
+            setCurrentHighlight(null);
+        }
       }
   }
 
@@ -679,6 +700,8 @@ export default function ReadPage() {
           <PdfViewer
             file={activeDoc.pdfUrl}
             zoomLevel={pdfZoomLevel}
+            highlight={currentHighlight}
+            documentText={documentText}
           />
       );
     }
@@ -966,7 +989,10 @@ export default function ReadPage() {
           ref={audioRef} 
           onPlay={() => setIsSpeaking(true)}
           onPause={() => setIsSpeaking(false)}
-          onEnded={() => setIsSpeaking(false)} 
+          onEnded={() => {
+            setIsSpeaking(false);
+            setCurrentHighlight(null);
+          }} 
           onLoadedMetadata={(e) => setAudioDuration(e.currentTarget.duration)}
           onTimeUpdate={handleAudioTimeUpdate}
           hidden 

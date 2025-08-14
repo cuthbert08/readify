@@ -13,7 +13,7 @@ import { ai } from '@/ai/genkit';
 import { GenerateSpeechInputSchema, GenerateSpeechOutputSchema, GenerateSpeechInput } from '@/ai/schemas';
 import { formatTextForSpeech } from './format-text-for-speech';
 import { generateOpenAIVoice } from './speech-generation/openai';
-import { generateAmazonVoice } from './speech-generation/amazon';
+import { generateAmazonVoice, SpeechMark } from './speech-generation/amazon';
 
 
 // This function can be directly called from client components as a Server Action.
@@ -33,13 +33,16 @@ export async function generateSpeech(
         const [provider, voiceName] = input.voice.split('/');
         const speakingRate = input.speakingRate || 1.0;
         let audioDataUris: string[] = [];
+        let speechMarks: SpeechMark[] | undefined = undefined;
 
         switch (provider) {
             case 'openai':
                 audioDataUris = await generateOpenAIVoice(formattedText, voiceName, speakingRate);
                 break;
             case 'amazon':
-                audioDataUris = await generateAmazonVoice(formattedText, voiceName);
+                const amazonResult = await generateAmazonVoice(formattedText, voiceName);
+                audioDataUris = amazonResult.audioDataUris;
+                speechMarks = amazonResult.speechMarks;
                 break;
             default:
                 throw new Error(`Unsupported voice provider: ${provider}`);
@@ -49,7 +52,7 @@ export async function generateSpeech(
             throw new Error("No audio was generated.");
         }
 
-        return { audioDataUris };
+        return { audioDataUris, speechMarks };
 
     } catch (error: any) {
         console.error("Error in generateSpeech action:", error);

@@ -1,7 +1,20 @@
 
 'use server';
 
-export async function generateAmazonVoice(formattedText: string, voice: string): Promise<string[]> {
+export type SpeechMark = {
+    time: number;
+    type: 'sentence' | 'word';
+    start: number;
+    end: number;
+    value: string;
+};
+
+export type AmazonVoiceOutput = {
+    audioDataUris: string[];
+    speechMarks: SpeechMark[];
+}
+
+export async function generateAmazonVoice(formattedText: string, voice: string): Promise<AmazonVoiceOutput> {
     const pollyUrl = process.env.AMAZON_POLLY_API_URL;
     if (!pollyUrl) {
         throw new Error('Amazon Polly API URL is not configured. Please set the AMAZON_POLLY_API_URL environment variable.');
@@ -24,12 +37,13 @@ export async function generateAmazonVoice(formattedText: string, voice: string):
         throw new Error(`Polly API Error (${response.status}): ${errorBody}`);
     }
 
-    // The Lambda now returns an array of base64 chunks
-    const { audioChunks } = await response.json();
+    const { audioChunks, speechMarks } = await response.json();
     if (!audioChunks || !Array.isArray(audioChunks)) {
         throw new Error('Amazon Polly response did not include audio data in the expected format.');
     }
 
     // Prepend the data URI prefix to each chunk
-    return audioChunks.map(chunk => `data:audio/mp3;base64,${chunk}`);
+    const audioDataUris = audioChunks.map(chunk => `data:audio/mp3;base64,${chunk}`);
+    
+    return { audioDataUris, speechMarks };
 }
