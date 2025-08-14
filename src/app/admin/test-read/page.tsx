@@ -31,6 +31,7 @@ import AiTools from '@/components/test-layout/AiTools';
 import DocumentLibrary from '@/components/test-layout/DocumentLibrary';
 import UserPanel from '@/components/test-layout/UserPanel';
 import UploadTool from '@/components/test-layout/UploadTool';
+import { TooltipProvider } from '@/components/ui/tooltip';
 
 
 type GenerationState = 'idle' | 'generating' | 'error';
@@ -766,6 +767,7 @@ export default function TestReadPage() {
   }
 
   return (
+    <TooltipProvider>
       <div className={cn("flex h-screen w-full bg-background", isFullScreen && "fixed inset-0 z-50")}>
         <Sidebar className={cn(isFullScreen && "hidden")}>
             <SidebarHeader>
@@ -869,7 +871,10 @@ export default function TestReadPage() {
           onPlayAudio={handlePlayAiResponse}
         />
       </div>
+    </TooltipProvider>
   );
 }
+
+    
 
     
