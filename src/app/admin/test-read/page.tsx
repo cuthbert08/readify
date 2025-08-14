@@ -1,7 +1,7 @@
 
 'use client';
 
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { UploadCloud, BarChart, TestTube2 } from 'lucide-react';
 import { useDocumentManager } from '@/hooks/test-page/useDocumentManager';
@@ -77,15 +77,15 @@ export default function TestReadPage() {
     setSpeechMarks,
   } = useDocumentManager();
   
+  // Audio Player State
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const [isSpeaking, setIsSpeaking] = useState(false);
+  const [audioProgress, setAudioProgress] = useState(0);
+  const [audioDuration, setAudioDuration] = useState(0);
+  const [audioCurrentTime, setAudioCurrentTime] = useState(0);
+
   const {
-    audioRef,
     previewAudioRef,
-    isSpeaking,
-    setIsSpeaking,
-    audioProgress,
-    audioDuration,
-    setAudioDuration,
-    audioCurrentTime,
     availableVoices,
     selectedVoice,
     setSelectedVoice,
@@ -94,15 +94,18 @@ export default function TestReadPage() {
     playbackRate,
     setPlaybackRate,
     generationState,
-    handlePlayPause,
     handleGenerateAudio,
-    handleAudioTimeUpdate,
     handlePreviewVoice,
-    handleSeek,
-    handleForward,
-    handleRewind,
     getProcessingMessage,
-  } = useAudioManager({ activeDoc, documentText, speechMarks, setCurrentHighlight, setSpeechMarks });
+  } = useAudioManager({ 
+      activeDoc, 
+      documentText, 
+      speechMarks, 
+      setSpeechMarks, 
+      audioRef,
+      setActiveDoc,
+      fetchUserDocuments,
+  });
   
   const {
     isAiDialogOpen,
@@ -126,8 +129,8 @@ export default function TestReadPage() {
       activeDoc, 
       selectedVoice, 
       speakingRate, 
-      fetchDoc: fetchUserDocuments,
-      setActiveDoc: setActiveDoc
+      setActiveDoc,
+      previewAudioRef
   });
   
   // State for the standalone synthesizer
@@ -196,6 +199,66 @@ export default function TestReadPage() {
   const handleDeleteDocument = (docId: string | null) => {
     deleteDoc(docId, () => clearActiveDoc(audioRef));
   };
+  
+  const handlePlayPause = async () => {
+    if (!audioRef.current) return;
+    if (isSpeaking) {
+      audioRef.current.pause();
+    } else if (audioRef.current.src && audioRef.current.src !== window.location.href) {
+      try {
+        await audioRef.current.play();
+      } catch (error) {
+        console.error("Error playing audio:", error);
+        toast({ variant: "destructive", title: "Playback Error", description: "Could not play the audio file." });
+      }
+    }
+  };
+
+  const handleAudioTimeUpdate = () => {
+    if (!audioRef.current) return;
+    const currentTime = audioRef.current.currentTime;
+    const currentTimeMs = currentTime * 1000;
+    setAudioCurrentTime(currentTime);
+
+    if (audioDuration > 0) {
+      setAudioProgress((currentTime / audioDuration) * 100);
+    }
+    
+    if (speechMarks.length > 0) {
+        const currentWord = speechMarks.find(mark => mark.type === 'word' && currentTimeMs >= mark.time && currentTimeMs < (mark.time + (mark.end - mark.start) * 10)); // Heuristic for word duration
+        const currentSentence = speechMarks.find(mark => mark.type === 'sentence' && currentTimeMs >= mark.time && currentTimeMs < (mark.time + (mark.end - mark.start) * 20)); // Heuristic for sentence duration
+        
+        if (currentWord) {
+            setCurrentHighlight({ type: 'word', start: currentWord.start, end: currentWord.end });
+        } else if (currentSentence) {
+            setCurrentHighlight({ type: 'sentence', start: currentSentence.start, end: currentSentence.end });
+        } else {
+            setCurrentHighlight(null);
+        }
+    }
+  };
+
+  const handleSeek = (value: number) => {
+    if (audioRef.current) {
+      audioRef.current.currentTime = value;
+      setAudioCurrentTime(value);
+    }
+  };
+
+  const handleForward = () => {
+    if (audioRef.current && audioRef.current.duration > 0) {
+      const newTime = Math.min(audioRef.current.currentTime + 10, audioRef.current.duration);
+      handleSeek(newTime);
+    }
+  };
+
+  const handleRewind = () => {
+    if (audioRef.current && audioRef.current.duration > 0) {
+      const newTime = Math.max(audioRef.current.currentTime - 10, 0);
+      handleSeek(newTime);
+    }
+  };
+
 
   const handleMoveComponent = (index: number, direction: 'up' | 'down') => {
     const newOrder = [...sidebarOrder];
@@ -266,7 +329,7 @@ export default function TestReadPage() {
           activeDocId={activeDoc?.id || null}
           generationState={generationState}
           onSelectDocument={handleSelectDocument}
-          onGenerateAudio={() => handleGenerateAudio(setActiveDoc, fetchUserDocuments)}
+          onGenerateAudio={handleGenerateAudio}
           onDeleteDocument={handleDeleteDocument}
           onMoveUp={() => handleMoveComponent(index, 'up')}
           onMoveDown={() => handleMoveComponent(index, 'down')}

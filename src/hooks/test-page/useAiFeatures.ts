@@ -38,11 +38,11 @@ type UseAiFeaturesProps = {
     activeDoc: Document | null;
     selectedVoice: string;
     speakingRate: number;
-    fetchDoc: () => Promise<void>;
     setActiveDoc: (doc: Document) => void;
+    previewAudioRef: React.RefObject<HTMLAudioElement>;
 };
 
-export const useAiFeatures = ({ documentText, activeDoc, selectedVoice, speakingRate, fetchDoc, setActiveDoc }: UseAiFeaturesProps) => {
+export const useAiFeatures = ({ documentText, activeDoc, selectedVoice, speakingRate, setActiveDoc, previewAudioRef }: UseAiFeaturesProps) => {
     const { toast } = useToast();
     const [isAiDialogOpen, setIsAiDialogOpen] = useState(false);
     const [aiDialogType, setAiDialogType] = useState<AiDialogType>('summary');
@@ -53,7 +53,6 @@ export const useAiFeatures = ({ documentText, activeDoc, selectedVoice, speaking
     const [isChatOpen, setIsChatOpen] = useState(false);
     const [isChatLoading, setIsChatLoading] = useState(false);
     const chatWindowRef = useRef<HTMLDivElement>(null);
-    const previewAudioRef = useRef<HTMLAudioElement | null>(null);
 
     const handleAiAction = async (type: AiDialogType) => {
         if (!documentText) {
@@ -229,5 +228,3 @@ export const useAiFeatures = ({ documentText, activeDoc, selectedVoice, speaking
         setIsChatOpen,
     };
 };
-
-    
