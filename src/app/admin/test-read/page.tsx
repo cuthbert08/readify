@@ -176,8 +176,9 @@ export default function TestReadPage() {
     router.push('/');
   };
 
-  const handleClearActiveDoc = () => {
-      clearActiveDoc(audioRef);
+  const handleClearActiveDocAndUpload = () => {
+    clearActiveDoc(audioRef);
+    fileInputRef.current?.click();
   }
 
   const handleSelectDocument = (doc: any) => {
@@ -206,7 +207,7 @@ export default function TestReadPage() {
       <div key={key}>
         <Separator className="my-2" />
         <UploadTool
-          onUploadClick={() => fileInputRef.current?.click()}
+          onUploadClick={handleClearActiveDocAndUpload}
           onMoveUp={() => handleMoveComponent(index, 'up')}
           onMoveDown={() => handleMoveComponent(index, 'down')}
           canMoveUp={index > 0}
@@ -320,7 +321,7 @@ export default function TestReadPage() {
                 <p className="mt-2 text-sm text-muted-foreground">
                     Drag and drop a PDF file here, or click the button below to select one.
                 </p>
-                <Button className="mt-6" onClick={() => fileInputRef.current?.click()}>
+                <Button className="mt-6" onClick={handleClearActiveDocAndUpload}>
                     Select PDF File
                 </Button>
                 <input
@@ -443,5 +444,7 @@ export default function TestReadPage() {
     </TooltipProvider>
   );
 }
+
+    
 
     
