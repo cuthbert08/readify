@@ -4,7 +4,7 @@
 import React from 'react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Button } from '@/components/ui/button';
-import { Library, PlusCircle, FileText, Cloud, Mic, Loader2, Trash2, ArrowUp, ArrowDown } from 'lucide-react';
+import { Library, FileText, Cloud, Mic, Loader2, Trash2, ArrowUp, ArrowDown } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { type Document } from '@/lib/db';
 
@@ -12,7 +12,6 @@ type DocumentLibraryProps = {
     documents: Document[];
     activeDocId: string | null;
     generationState: 'idle' | 'generating' | 'error';
-    onNewDocument: () => void;
     onSelectDocument: (doc: Document) => void;
     onGenerateAudio: () => void;
     onDeleteDocument: (docId: string | null) => void;
@@ -26,7 +25,6 @@ const DocumentLibrary: React.FC<DocumentLibraryProps> = ({
     documents,
     activeDocId,
     generationState,
-    onNewDocument,
     onSelectDocument,
     onGenerateAudio,
     onDeleteDocument,
@@ -44,16 +42,6 @@ const DocumentLibrary: React.FC<DocumentLibraryProps> = ({
                         My Test Documents
                     </div>
                     <div className="flex items-center">
-                        <Tooltip>
-                            <TooltipTrigger asChild>
-                                <Button variant="ghost" size="icon" className="h-7 w-7" onClick={onNewDocument}>
-                                    <PlusCircle className="h-5 w-5" />
-                                </Button>
-                            </TooltipTrigger>
-                            <TooltipContent>
-                                <p>New Document</p>
-                            </TooltipContent>
-                        </Tooltip>
                          <div className='flex items-center'>
                             <Button variant="ghost" size="icon" className="h-6 w-6" onClick={onMoveUp} disabled={!canMoveUp}>
                                 <ArrowUp className="h-4 w-4" />

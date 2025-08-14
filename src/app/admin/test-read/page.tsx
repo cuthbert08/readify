@@ -30,6 +30,7 @@ import AudioSettings from '@/components/test-layout/AudioSettings';
 import AiTools from '@/components/test-layout/AiTools';
 import DocumentLibrary from '@/components/test-layout/DocumentLibrary';
 import UserPanel from '@/components/test-layout/UserPanel';
+import UploadTool from '@/components/test-layout/UploadTool';
 
 
 type GenerationState = 'idle' | 'generating' | 'error';
@@ -100,7 +101,7 @@ export default function TestReadPage() {
   const [pdfZoomLevel, setPdfZoomLevel] = useState(1);
   const [isSavingZoom, setIsSavingZoom] = useState(false);
 
-  const [sidebarOrder, setSidebarOrder] = useState<string[]>(['audio', 'ai', 'docs']);
+  const [sidebarOrder, setSidebarOrder] = useState<string[]>(['upload', 'audio', 'ai', 'docs']);
 
 
   const { toast } = useToast();
@@ -182,10 +183,6 @@ export default function TestReadPage() {
     setAudioDuration(0);
     setAudioCurrentTime(0);
     setAudioProgress(0);
-  }
-
-  const handleNewDocumentClick = () => {
-      clearActiveDoc();
   }
 
   const handleSelectDocument = async (doc: Document) => {
@@ -637,6 +634,25 @@ export default function TestReadPage() {
   };
 
   const sidebarComponents = {
+    upload: (key: string, index: number) => (
+      <div key={key}>
+        <Separator className="my-2" />
+        <UploadTool
+          onUploadClick={() => fileInputRef.current?.click()}
+          onMoveUp={() => handleMoveComponent(index, 'up')}
+          onMoveDown={() => handleMoveComponent(index, 'down')}
+          canMoveUp={index > 0}
+          canMoveDown={index < sidebarOrder.length - 1}
+        />
+        <input
+            type="file"
+            ref={fileInputRef}
+            onChange={(e) => handleFileChange(e.target.files)}
+            accept="application/pdf"
+            className="hidden"
+        />
+      </div>
+    ),
     audio: (key: string, index: number) => (
       <div key={key}>
         <Separator className="my-2" />
@@ -678,7 +694,6 @@ export default function TestReadPage() {
           documents={userDocuments}
           activeDocId={activeDoc?.id || null}
           generationState={generationState}
-          onNewDocument={handleNewDocumentClick}
           onSelectDocument={handleSelectDocument}
           onGenerateAudio={handleGenerateAudio}
           onDeleteDocument={handleDeleteDocument}
