@@ -95,8 +95,6 @@ export default function TestReadPage() {
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [isChatLoading, setIsChatLoading] = useState(false);
 
-  const [uploadStage, setUploadStage] = useState<UploadStage>('idle');
-  const [isUploading, setIsUploading] = useState(false);
   const [isFullScreen, setIsFullScreen] = useState(false);
   const [pdfZoomLevel, setPdfZoomLevel] = useState(1);
   const [isSavingZoom, setIsSavingZoom] = useState(false);
@@ -111,6 +109,7 @@ export default function TestReadPage() {
   const router = useRouter();
   const chatWindowRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const localPdfUrlRef = useRef<string | null>(null);
 
 
   useEffect(() => {
@@ -154,10 +153,13 @@ export default function TestReadPage() {
     }
     fetchVoices();
 
-     // Cleanup blob URL on unmount
+     // Cleanup blob URLs on unmount
     return () => {
       if (localAudioUrlRef.current) {
         URL.revokeObjectURL(localAudioUrlRef.current);
+      }
+      if (localPdfUrlRef.current) {
+        URL.revokeObjectURL(localPdfUrlRef.current);
       }
     };
 
@@ -179,6 +181,10 @@ export default function TestReadPage() {
      if (localAudioUrlRef.current) {
         URL.revokeObjectURL(localAudioUrlRef.current);
         localAudioUrlRef.current = null;
+    }
+    if (localPdfUrlRef.current) {
+        URL.revokeObjectURL(localPdfUrlRef.current);
+        localPdfUrlRef.current = null;
     }
     setAudioDuration(0);
     setAudioCurrentTime(0);
@@ -526,17 +532,6 @@ export default function TestReadPage() {
       }
   }
 
-  const getUploadMessage = () => {
-    switch (uploadStage) {
-        case 'uploading': return 'Uploading file...';
-        case 'extracting': return 'Extracting text...';
-        case 'cleaning': return 'Cleaning up content...';
-        case 'saving': return 'Saving document...';
-        case 'error': return 'An error occurred during upload.';
-        default: return 'Drag & drop PDF here or click to upload';
-    }
-  };
-
   const handleFileChange = (files: FileList | null) => {
     if (files && files[0]) {
       handleFileUpload(files[0]);
@@ -552,11 +547,32 @@ export default function TestReadPage() {
       });
       return;
     }
-    setIsUploading(true);
-    setUploadStage('uploading');
+    clearActiveDoc();
+
+    // Create a local URL to display the PDF immediately
+    const localUrl = URL.createObjectURL(file);
+    localPdfUrlRef.current = localUrl;
+
+    // Create a temporary document object for immediate display
+    const tempDoc: ActiveDocument = {
+      id: `local-${Date.now()}`, // Temporary local ID
+      userId: '',
+      fileName: file.name,
+      pdfUrl: localUrl,
+      textContent: '',
+      audioUrl: null,
+      zoomLevel: 1,
+      createdAt: new Date().toISOString(),
+      chatHistory: [],
+      quizAttempt: null
+    };
+    setActiveDoc(tempDoc);
+    toast({ title: "Processing Document", description: "PDF is viewable now. AI features will be enabled shortly." });
 
     try {
-        // Step 1: Upload to Vercel Blob
+        // --- Start background processing ---
+        
+        // 1. Upload to Vercel Blob
         const uploadResponse = await fetch('/api/upload', {
             method: 'POST',
             headers: { 
@@ -565,12 +581,10 @@ export default function TestReadPage() {
             },
             body: file,
         });
-
         if (!uploadResponse.ok) throw new Error('Failed to upload file.');
         const blob = await uploadResponse.json();
 
-        // Step 2: Extract text from PDF
-        setUploadStage('extracting');
+        // 2. Extract text from PDF
         const pdf = await (window as any).pdfjsLib.getDocument(blob.url).promise;
         const numPages = pdf.numPages;
         let rawText = '';
@@ -580,13 +594,11 @@ export default function TestReadPage() {
             rawText += textContent.items.map((item: any) => item.str).join(' ');
         }
         
-        // Step 3: Clean text with AI
-        setUploadStage('cleaning');
+        // 3. Clean text with AI
         const { cleanedText } = await cleanPdfText({ rawText });
         setDocumentText(cleanedText);
 
-        // Step 4: Save document to database
-        setUploadStage('saving');
+        // 4. Save document to database
         const newDoc = await saveDocument({
             fileName: file.name,
             pdfUrl: blob.url,
@@ -594,18 +606,24 @@ export default function TestReadPage() {
             zoomLevel: 1,
         }, IS_STAGING);
         
+        // --- End background processing ---
+
+        // Replace the temporary doc with the final saved one
+        setActiveDoc(newDoc);
         await fetchUserDocuments();
-        handleSelectDocument(newDoc);
-        toast({ title: "Success", description: "Your document has been prepared." });
+
+        // Revoke the local URL as it's no longer needed
+        URL.revokeObjectURL(localUrl);
+        localPdfUrlRef.current = null;
+
+        toast({ title: "Success", description: "Your document has been prepared and all features are active." });
 
     } catch (error) {
-        setUploadStage('error');
         console.error("File upload process failed:", error);
         const message = error instanceof Error ? error.message : "An unknown error occurred during upload.";
         toast({ variant: "destructive", title: "Upload Failed", description: message });
-    } finally {
-        setIsUploading(false);
-        setUploadStage('idle');
+        // Clear the view if processing fails
+        clearActiveDoc();
     }
   };
 
@@ -613,7 +631,7 @@ export default function TestReadPage() {
   const handleZoomIn = () => setPdfZoomLevel(Math.min(pdfZoomLevel + 0.2, 3));
   const handleZoomOut = () => setPdfZoomLevel(Math.max(pdfZoomLevel - 0.2, 0.4));
   const handleSaveZoom = async () => {
-    if (!activeDoc) return;
+    if (!activeDoc || activeDoc.id.startsWith('local-')) return;
     setIsSavingZoom(true);
     try {
         await saveDocument({ id: activeDoc.id, zoomLevel: pdfZoomLevel }, IS_STAGING);
@@ -716,16 +734,6 @@ export default function TestReadPage() {
           />
       );
     }
-
-    if (isUploading) {
-        return (
-            <div className="w-full h-full flex flex-col items-center justify-center text-center p-4 bg-muted/50 rounded-lg">
-                <Loader2 className="h-12 w-12 animate-spin text-primary mb-4" />
-                <p className="text-xl font-semibold">{getUploadMessage()}</p>
-                <p className="text-muted-foreground">Please wait while we process your document.</p>
-            </div>
-        );
-    }
     
     return (
         <div
@@ -802,7 +810,7 @@ export default function TestReadPage() {
                         canPlay={!!(activeDoc?.audioUrl)}
                         playbackRate={playbackRate}
                         onPlaybackRateChange={setPlaybackRate}
-                        showDownload={!!activeDoc?.audioUrl && generationState === 'idle'}
+                        showDownload={!!activeDoc?.audioUrl && generationState === 'idle' && !activeDoc.id.startsWith('local-')}
                         downloadUrl={activeDoc?.audioUrl || ''}
                         downloadFileName={`${activeDoc?.fileName?.replace(/\.pdf$/i, '') || 'audio'}.mp3`}
                         progress={audioProgress}
@@ -863,3 +871,5 @@ export default function TestReadPage() {
       </div>
   );
 }
+
+    
