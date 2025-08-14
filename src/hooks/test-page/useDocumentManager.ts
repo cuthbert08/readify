@@ -51,7 +51,7 @@ export const useDocumentManager = () => {
         }
     }, [toast]);
 
-    const clearActiveDocState = (audioRef: React.RefObject<HTMLAudioElement>) => {
+    const clearActiveDoc = (audioRef: React.RefObject<HTMLAudioElement>) => {
         setActiveDoc(null);
         setDocumentText('');
         if (audioRef.current) {
@@ -67,10 +67,15 @@ export const useDocumentManager = () => {
         setActiveDoc(doc);
     }
 
-    const handleSelectDocument = async (doc: Document) => {
+    const handleSelectDocument = async (doc: Document, audioRef: React.RefObject<HTMLAudioElement>) => {
+        clearActiveDoc(audioRef);
         setActiveDoc(doc);
         setDocumentText(doc.textContent || '');
         setPdfZoomLevel(doc.zoomLevel);
+        if (doc.audioUrl && audioRef.current) {
+            audioRef.current.src = doc.audioUrl;
+            audioRef.current.load();
+        }
     };
 
     const handleFileUpload = async (file: File, clearDoc: () => void) => {
@@ -193,18 +198,13 @@ export const useDocumentManager = () => {
         isAdmin,
         userEmail,
         fetchUserDocuments,
-        handleSelectDocument: (doc: Document) => {
-            clearActiveDocState(useRef<HTMLAudioElement>(null));
-            handleSelectDocument(doc);
-        },
-        handleFileUpload: (file: File, clearDoc: () => void) => handleFileUpload(file, clearDoc),
-        handleDeleteDocument: (docId: string | null, clearDoc: () => void) => handleDeleteDocument(docId, clearDoc),
+        handleSelectDocument,
+        handleFileUpload,
+        handleDeleteDocument,
         handleZoomIn,
         handleZoomOut,
         handleSaveZoom,
-        clearActiveDoc: () => clearActiveDocState(useRef<HTMLAudioElement>(null)),
+        clearActiveDoc,
         handleSetUsername,
     };
 };
-
-    

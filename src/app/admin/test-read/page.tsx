@@ -40,9 +40,9 @@ export default function TestReadPage() {
     localPdfUrlRef,
     isAdmin,
     userEmail,
-    handleSelectDocument,
-    handleFileUpload,
-    handleDeleteDocument,
+    handleSelectDocument: selectDoc,
+    handleFileUpload: uploadFile,
+    handleDeleteDocument: deleteDoc,
     handleZoomIn,
     handleZoomOut,
     handleSaveZoom,
@@ -55,8 +55,10 @@ export default function TestReadPage() {
     audioRef,
     previewAudioRef,
     isSpeaking,
+    setIsSpeaking,
     audioProgress,
     audioDuration,
+    setAudioDuration,
     audioCurrentTime,
     availableVoices,
     selectedVoice,
@@ -107,10 +109,22 @@ export default function TestReadPage() {
     router.push('/');
   };
 
-  const handleFileChange = (files: FileList | null) => {
+  const handleClearActiveDoc = () => {
+      clearActiveDoc(audioRef);
+  }
+
+  const handleSelectDocument = (doc: any) => {
+    selectDoc(doc, audioRef);
+  };
+  
+  const handleFileUpload = (files: FileList | null) => {
     if (files && files[0]) {
-      handleFileUpload(files[0], clearActiveDoc);
+      uploadFile(files[0], handleClearActiveDoc);
     }
+  };
+  
+  const handleDeleteDocument = (docId: string | null) => {
+    deleteDoc(docId, handleClearActiveDoc);
   };
 
   const handleMoveComponent = (index: number, direction: 'up' | 'down') => {
@@ -134,7 +148,7 @@ export default function TestReadPage() {
         <input
             type="file"
             ref={fileInputRef}
-            onChange={(e) => handleFileChange(e.target.files)}
+            onChange={(e) => handleFileUpload(e.target.files)}
             accept="application/pdf"
             className="hidden"
         />
@@ -182,7 +196,7 @@ export default function TestReadPage() {
           activeDocId={activeDoc?.id || null}
           generationState={generationState}
           onSelectDocument={handleSelectDocument}
-          onGenerateAudio={handleGenerateAudio}
+          onGenerateAudio={() => handleGenerateAudio(handleSetUsername, fetchUserDocuments)}
           onDeleteDocument={handleDeleteDocument}
           onMoveUp={() => handleMoveComponent(index, 'up')}
           onMoveDown={() => handleMoveComponent(index, 'down')}
@@ -209,7 +223,7 @@ export default function TestReadPage() {
           onDragOver={(e) => e.preventDefault()}
           onDrop={(e) => {
             e.preventDefault();
-            handleFileChange(e.dataTransfer.files);
+            handleFileUpload(e.dataTransfer.files);
           }}
         >
             <div className="text-center p-8 border-2 border-dashed border-muted-foreground/30 rounded-xl max-w-lg w-full">
@@ -224,7 +238,7 @@ export default function TestReadPage() {
                 <input
                     type="file"
                     ref={fileInputRef}
-                    onChange={(e) => handleFileChange(e.target.files)}
+                    onChange={(e) => handleFileUpload(e.target.files)}
                     accept="application/pdf"
                     className="hidden"
                 />
@@ -341,5 +355,3 @@ export default function TestReadPage() {
     </TooltipProvider>
   );
 }
-
-    
