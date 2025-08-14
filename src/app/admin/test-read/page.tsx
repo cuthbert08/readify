@@ -13,20 +13,11 @@ import { summarizePdf, SummarizePdfOutput } from '@/ai/flows/summarize-pdf';
 import { chatWithPdf, ChatWithPdfOutput } from '@/ai/flows/chat-with-pdf';
 import { generateGlossary, GenerateGlossaryOutput, GlossaryItem } from '@/ai/flows/glossary-flow';
 import { generateQuiz, type GenerateQuizOutput } from '@/ai/flows/quiz-flow';
-import { Sidebar, SidebarHeader, SidebarMenu, SidebarMenuItem, SidebarMenuButton, SidebarFooter, SidebarContent } from '@/components/ui/sidebar';
+import { Sidebar, SidebarHeader, SidebarFooter, SidebarContent } from '@/components/ui/sidebar';
 import { getDocuments, saveDocument, Document, getUserSession, ChatMessage, deleteDocument, clearChatHistory } from '@/lib/db';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import AiDialog, { AiDialogType } from '@/components/ai-dialog';
 import { Separator } from '@/components/ui/separator';
 import { cn } from '@/lib/utils';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue, SelectGroup } from '@/components/ui/select';
-import { Label } from '@/components/ui/label';
-import { Slider } from '@/components/ui/slider';
-import { Volume2 } from 'lucide-react';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Textarea } from '@/components/ui/textarea';
-import { Card } from '@/components/ui/card';
 import { ThemeToggle } from '@/components/theme-toggle';
 import { ChatWindow } from '@/components/chat-window';
 import { generateQuizFeedback } from '@/ai/flows/quiz-feedback-flow';
@@ -34,6 +25,12 @@ import { cleanPdfText } from '@/ai/flows/clean-text-flow';
 import { generateSpeech } from '@/ai/flows/generate-speech';
 import PdfViewer from '@/components/pdf-viewer';
 import type { PDFDocumentProxy } from 'pdfjs-dist';
+
+import AudioSettings from '@/components/test-layout/AudioSettings';
+import AiTools from '@/components/test-layout/AiTools';
+import DocumentLibrary from '@/components/test-layout/DocumentLibrary';
+import UserPanel from '@/components/test-layout/UserPanel';
+
 
 type GenerationState = 'idle' | 'generating' | 'error';
 type ActiveDocument = Document;
@@ -93,12 +90,6 @@ export default function TestReadPage() {
   const [userEmail, setUserEmail] = useState('');
 
   const [generationState, setGenerationState] = useState<GenerationState>('idle');
-
-  const [synthesisText, setSynthesisText] = useState('');
-  const [synthesisVoice, setSynthesisVoice] = useState('openai/alloy');
-  const [synthesisRate, setSynthesisRate] = useState(1.0);
-  const [isSynthesizing, setIsSynthesizing] = useState(false);
-  const [synthesisAudioUrl, setSynthesisAudioUrl] = useState<string | null>(null);
 
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [isChatLoading, setIsChatLoading] = useState(false);
@@ -370,38 +361,6 @@ export default function TestReadPage() {
     }
   };
 
-  const handleSynthesize = async () => {
-      if (!synthesisText.trim()) {
-          toast({ variant: "destructive", title: "No Text", description: "Please enter some text to synthesize." });
-          return;
-      }
-      setIsSynthesizing(true);
-      setSynthesisAudioUrl(null);
-      if (localAudioUrlRef.current) {
-          URL.revokeObjectURL(localAudioUrlRef.current);
-          localAudioUrlRef.current = null;
-      }
-      try {
-        const result = await generateSpeech({
-            text: synthesisText,
-            voice: synthesisVoice, // Use local voice for this tab
-            speakingRate: synthesisRate, // Use local rate for this tab
-        });
-          
-        if (result.audioDataUris && result.audioDataUris.length > 0) {
-            const mergedAudioBlob = await mergeAudio(result.audioDataUris);
-            const audioUrl = URL.createObjectURL(mergedAudioBlob);
-            localAudioUrlRef.current = audioUrl;
-            setSynthesisAudioUrl(audioUrl);
-        }
-      } catch (error) {
-          const errorMessage = error instanceof Error ? error.message : "An unknown error occurred";
-          toast({ variant: "destructive", title: "Synthesis Error", description: `Could not generate audio: ${errorMessage}` });
-      } finally {
-          setIsSynthesizing(false);
-      }
-  };
-
   useEffect(() => {
       if(audioRef.current) {
           audioRef.current.playbackRate = playbackRate;
@@ -652,17 +611,6 @@ export default function TestReadPage() {
   };
 
 
-  const groupedVoices = useMemo(() => {
-    return availableVoices.reduce((acc, voice) => {
-        const provider = voice.provider;
-        if (!acc[provider]) {
-            acc[provider] = [];
-        }
-        acc[provider].push(voice);
-        return acc;
-    }, {} as Record<string, AvailableVoice[]>);
-  }, [availableVoices]);
-
   const handleZoomIn = () => setPdfZoomLevel(Math.min(pdfZoomLevel + 0.2, 3));
   const handleZoomOut = () => setPdfZoomLevel(Math.max(pdfZoomLevel - 0.2, 0.4));
   const handleSaveZoom = async () => {
@@ -731,7 +679,6 @@ export default function TestReadPage() {
   }
 
   return (
-    <TooltipProvider>
       <div className={cn("flex h-screen w-full bg-background", isFullScreen && "fixed inset-0 z-50")}>
         <Sidebar className={cn(isFullScreen && "hidden")}>
             <SidebarHeader>
@@ -747,179 +694,43 @@ export default function TestReadPage() {
                 </div>
             </SidebarHeader>
             <SidebarContent>
-            <Separator className="my-2" />
-            <div>
-                <div className="p-2 text-sm font-semibold flex items-center gap-2 text-muted-foreground">
-                    <Settings />
-                    Audio Settings
-                </div>
-                <div className="p-2 space-y-4">
-                    <div className='space-y-2'>
-                        <Label>Voice</Label>
-                        <Select value={selectedVoice} onValueChange={setSelectedVoice} disabled={isSpeaking || generationState === 'generating'}>
-                            <SelectTrigger>
-                                <SelectValue placeholder="Select a voice"/>
-                            </SelectTrigger>
-                            <SelectContent>
-                              {Object.entries(groupedVoices).map(([provider, voices]) => (
-                                  <SelectGroup key={provider}>
-                                      <Label className="px-2 py-1.5 text-xs font-semibold text-muted-foreground">{provider.toUpperCase()}</Label>
-                                      {voices.map((voice) => (
-                                      <div key={voice.name} className="flex items-center justify-between pr-2">
-                                          <SelectItem value={voice.name} className="flex-1">
-                                              {voice.displayName} ({voice.gender})
-                                          </SelectItem>
-                                          <Button 
-                                              variant="ghost" 
-                                              size="icon" 
-                                              className="h-7 w-7 ml-2 shrink-0"
-                                              onClick={(e) => {
-                                                  e.stopPropagation();
-                                                  handlePreviewVoice(voice.name);
-                                              }}
-                                              aria-label={`Preview voice ${voice.name}`}
-                                          >
-                                              <Volume2 className="h-4 w-4" />
-                                          </Button>
-                                      </div>
-                                      ))}
-                                  </SelectGroup>
-                              ))}
-                            </SelectContent>
-                        </Select>
-                    </div>
-                    <div className='space-y-2'>
-                        <Label htmlFor="speaking-rate">Speaking Rate: {speakingRate.toFixed(2)}x</Label>
-                        <Slider id="speaking-rate" min={0.25} max={4.0} step={0.25} value={[speakingRate]} onValueChange={(v) => setSpeakingRate(v[0])} disabled={isSpeaking || generationState === 'generating'} />
-                    </div>
-                </div>
-            </div>
-
-            <Separator className="my-2" />
-            <div>
-            <div className="p-2 text-sm font-semibold flex items-center gap-2 text-muted-foreground">
-                <Bot />
-                AI Tools
-            </div>
-                <SidebarMenuItem>
-                <SidebarMenuButton onClick={() => handleAiAction('summary')} disabled={!documentText}>
-                    <Lightbulb />
-                    Summarize & Key Points
-                </SidebarMenuButton>
-                </SidebarMenuItem>
-                <SidebarMenuItem>
-                <SidebarMenuButton onClick={() => handleAiAction('glossary')} disabled={!documentText}>
-                    <BookOpenCheck />
-                    Create Glossary
-                </SidebarMenuButton>
-                </SidebarMenuItem>
-                <SidebarMenuItem>
-                    <SidebarMenuButton onClick={() => handleAiAction('quiz')} disabled={!documentText}>
-                        <BrainCircuit />
-                        {activeDoc?.quizAttempt ? 'Review Quiz' : 'Generate Quiz'}
-                    </SidebarMenuButton>
-                </SidebarMenuItem>
-                <SidebarMenuItem>
-                <SidebarMenuButton onClick={() => setIsChatOpen(true)} disabled={!documentText}>
-                    <MessageSquare />
-                    Chat with Document
-                </SidebarMenuButton>
-                </SidebarMenuItem>
-            </div>
-            <Separator className="my-2" />
-            <div>
-                <div className="flex justify-between items-center p-2 text-sm font-semibold text-muted-foreground">
-                    <div className="flex items-center gap-2">
-                        <Library />
-                        My Test Documents
-                    </div>
-                    <Tooltip>
-                        <TooltipTrigger asChild>
-                            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={handleNewDocumentClick}>
-                                <PlusCircle className="h-5 w-5" />
-                            </Button>
-                        </TooltipTrigger>
-                        <TooltipContent>
-                            <p>New Document</p>
-                        </TooltipContent>
-                    </Tooltip>
-                </div>
-                <div className="px-2">
-                    {userDocuments.map((doc) => (
-                    <div key={doc.id} className={cn(
-                        "flex w-full items-center gap-2 overflow-hidden rounded-md p-2 text-left text-sm mb-1 group",
-                        activeDoc?.id === doc.id && "bg-sidebar-accent font-medium text-sidebar-accent-foreground"
-                    )}>
-                        <FileText />
-                        <div className="flex-1 flex items-center justify-between">
-                            <Tooltip>
-                            <TooltipTrigger asChild>
-                                <button onClick={() => handleSelectDocument(doc)} className="truncate max-w-[150px] text-left hover:underline">
-                                    {doc.fileName}
-                                </button>
-                            </TooltipTrigger>
-                            <TooltipContent><p>{doc.fileName}</p></TooltipContent>
-                            </Tooltip>
-                            <div className="flex items-center opacity-0 group-hover:opacity-100 transition-opacity">
-                              {doc.audioUrl ? (
-                                  <Tooltip>
-                                      <TooltipTrigger asChild>
-                                          <Cloud className="h-4 w-4 text-primary mr-1" />
-                                      </TooltipTrigger>
-                                      <TooltipContent><p>Audio is saved</p></TooltipContent>
-                                  </Tooltip>
-                              ) : (
-                                  <Tooltip>
-                                      <TooltipTrigger asChild>
-                                          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleGenerateAudio()} disabled={generationState === 'generating' || activeDoc?.id !== doc.id}>
-                                              {generationState === 'generating' && activeDoc?.id === doc.id ? <Loader2 className="h-4 w-4 animate-spin text-destructive" /> : <Mic className="h-4 w-4" />}
-                                          </Button>
-                                      </TooltipTrigger>
-                                      <TooltipContent><p>{generationState === 'generating' && activeDoc?.id === doc.id ? 'Generating...' : 'Generate Audio'}</p></TooltipContent>
-                                  </Tooltip>
-                              )}
-                              <Tooltip>
-                                  <TooltipTrigger asChild>
-                                      <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleDeleteDocument(doc.id)}>
-                                          <Trash2 className="h-4 w-4 text-destructive" />
-                                      </Button>
-                                  </TooltipTrigger>
-                                  <TooltipContent><p>Delete document</p></TooltipContent>
-                              </Tooltip>
-                            </div>
-                        </div>
-                    </div>
-                    ))}
-                </div>
-            </div>
+                <Separator className="my-2" />
+                <AudioSettings 
+                    availableVoices={availableVoices}
+                    selectedVoice={selectedVoice}
+                    onSelectedVoiceChange={setSelectedVoice}
+                    speakingRate={speakingRate}
+                    onSpeakingRateChange={setSpeakingRate}
+                    isSpeaking={isSpeaking}
+                    generationState={generationState}
+                    onPreviewVoice={handlePreviewVoice}
+                />
+                <Separator className="my-2" />
+                <AiTools 
+                    onAiAction={handleAiAction}
+                    onChatOpen={() => setIsChatOpen(true)}
+                    documentText={documentText}
+                    activeDoc={activeDoc}
+                />
+                <Separator className="my-2" />
+                <DocumentLibrary 
+                    documents={userDocuments}
+                    activeDocId={activeDoc?.id || null}
+                    generationState={generationState}
+                    onNewDocument={handleNewDocumentClick}
+                    onSelectDocument={handleSelectDocument}
+                    onGenerateAudio={handleGenerateAudio}
+                    onDeleteDocument={handleDeleteDocument}
+                />
             </SidebarContent>
             <SidebarFooter>
-            {isAdmin && (
-                <>
-                    <SidebarMenu>
-                    <SidebarMenuItem>
-                        <SidebarMenuButton onClick={() => router.push('/admin')}>
-                            <Settings />
-                            Back to Admin
-                        </SidebarMenuButton>
-                    </SidebarMenuItem>
-                    </SidebarMenu>
-                    <Separator />
-                </>
-                )}
-            <div className="flex items-center gap-3 p-2">
-                <Avatar>
-                <AvatarImage data-ai-hint="user avatar" src="https://placehold.co/40x40.png" />
-                <AvatarFallback>{userEmail.charAt(0).toUpperCase()}</AvatarFallback>
-                </Avatar>
-                <div className="flex-1 overflow-hidden">
-                <p className="text-sm font-medium truncate" onClick={() => router.push('/profile')} style={{cursor: 'pointer'}}>{userEmail}</p>
-                </div>
-                <Button onClick={handleLogout} variant="ghost" size="icon">
-                    <LogOut className="h-5 w-5"/>
-                    <span className="sr-only">Log out</span>
-                </Button>
-            </div>
+                <UserPanel 
+                    isAdmin={isAdmin}
+                    userEmail={userEmail}
+                    onLogout={handleLogout}
+                    onNavigateToAdmin={() => router.push('/admin')}
+                    onNavigateToProfile={() => router.push('/profile')}
+                />
             </SidebarFooter>
         </Sidebar>
         
@@ -998,6 +809,5 @@ export default function TestReadPage() {
           onPlayAudio={handlePlayAiResponse}
         />
       </div>
-    </TooltipProvider>
   );
 }
