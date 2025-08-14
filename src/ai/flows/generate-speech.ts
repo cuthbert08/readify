@@ -89,8 +89,10 @@ async function generateAmazon(formattedText: string, voice: string): Promise<str
 
     if (!response.ok) {
         const errorBody = await response.text();
+        // Log the full error for server-side debugging
         console.error("Amazon Polly Lambda Error:", errorBody);
-        throw new Error(`Failed to get audio from Amazon Polly: ${errorBody}`);
+        // Throw a detailed error for the client
+        throw new Error(`Polly API Error (${response.status}): ${errorBody}`);
     }
 
     // The Lambda now returns an array of base64 chunks
