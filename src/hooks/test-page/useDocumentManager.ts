@@ -63,10 +63,6 @@ export const useDocumentManager = () => {
         }
     };
     
-    const handleSetUsername = (doc: Document) => {
-        setActiveDoc(doc);
-    }
-
     const handleSelectDocument = async (doc: Document, audioRef: React.RefObject<HTMLAudioElement>) => {
         clearActiveDoc(audioRef);
         setActiveDoc(doc);
@@ -186,7 +182,7 @@ export const useDocumentManager = () => {
     
     return {
         activeDoc,
-        setActiveDoc: handleSetUsername,
+        setActiveDoc,
         documentText,
         setDocumentText,
         userDocuments,
@@ -205,6 +201,5 @@ export const useDocumentManager = () => {
         handleZoomOut,
         handleSaveZoom,
         clearActiveDoc,
-        handleSetUsername,
     };
 };

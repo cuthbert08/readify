@@ -206,7 +206,7 @@ export const useAudioManager = ({ activeDoc, documentText }: UseAudioManagerProp
         generationState,
         setGenerationState,
         handlePlayPause,
-        handleGenerateAudio: (setActiveDoc: (doc: Document) => void, fetchUserDocuments: () => void) => handleGenerateAudio(setActiveDoc, fetchUserDocuments),
+        handleGenerateAudio,
         handleAudioTimeUpdate,
         handlePreviewVoice,
         handleSeek,
@@ -215,5 +215,3 @@ export const useAudioManager = ({ activeDoc, documentText }: UseAudioManagerProp
         getProcessingMessage,
     };
 };
-
-    

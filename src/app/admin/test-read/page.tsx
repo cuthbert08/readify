@@ -33,11 +33,11 @@ export default function TestReadPage() {
 
   const {
     activeDoc,
+    setActiveDoc,
     documentText,
     userDocuments,
     pdfZoomLevel,
     isSavingZoom,
-    localPdfUrlRef,
     isAdmin,
     userEmail,
     handleSelectDocument: selectDoc,
@@ -48,7 +48,6 @@ export default function TestReadPage() {
     handleSaveZoom,
     clearActiveDoc,
     fetchUserDocuments,
-    handleSetUsername,
   } = useDocumentManager();
   
   const {
@@ -101,7 +100,7 @@ export default function TestReadPage() {
       selectedVoice, 
       speakingRate, 
       fetchDoc: fetchUserDocuments,
-      setActiveDoc: handleSetUsername
+      setActiveDoc: setActiveDoc
   });
   
   const handleLogout = async () => {
@@ -119,12 +118,12 @@ export default function TestReadPage() {
   
   const handleFileUpload = (files: FileList | null) => {
     if (files && files[0]) {
-      uploadFile(files[0], handleClearActiveDoc);
+      uploadFile(files[0], () => clearActiveDoc(audioRef));
     }
   };
   
   const handleDeleteDocument = (docId: string | null) => {
-    deleteDoc(docId, handleClearActiveDoc);
+    deleteDoc(docId, () => clearActiveDoc(audioRef));
   };
 
   const handleMoveComponent = (index: number, direction: 'up' | 'down') => {
@@ -196,7 +195,7 @@ export default function TestReadPage() {
           activeDocId={activeDoc?.id || null}
           generationState={generationState}
           onSelectDocument={handleSelectDocument}
-          onGenerateAudio={() => handleGenerateAudio(handleSetUsername, fetchUserDocuments)}
+          onGenerateAudio={() => handleGenerateAudio(setActiveDoc, fetchUserDocuments)}
           onDeleteDocument={handleDeleteDocument}
           onMoveUp={() => handleMoveComponent(index, 'up')}
           onMoveDown={() => handleMoveComponent(index, 'down')}
