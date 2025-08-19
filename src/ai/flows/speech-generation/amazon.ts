@@ -15,10 +15,12 @@ export type AmazonVoiceOutput = {
 }
 
 export async function generateAmazonVoice(formattedText: string, voice: string): Promise<AmazonVoiceOutput> {
-    const pollyUrl = process.env.AMAZON_POLLY_API_URL;
-    if (!pollyUrl) {
+    const pollyBaseUrl = process.env.AMAZON_POLLY_API_URL;
+    if (!pollyBaseUrl) {
         throw new Error('Amazon Polly API URL is not configured. Please set the AMAZON_POLLY_API_URL environment variable.');
     }
+    const pollyUrl = `${pollyBaseUrl.replace(/\/$/, '')}/tts`;
+
 
     const response = await fetch(pollyUrl, {
         method: 'POST',

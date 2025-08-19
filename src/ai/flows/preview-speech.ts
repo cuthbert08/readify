@@ -28,8 +28,10 @@ async function handleOpenAIPreview(voice: string) {
 }
 
 async function handleAmazonPreview(voice: string) {
-    const pollyUrl = process.env.AMAZON_POLLY_API_URL;
-    if (!pollyUrl) throw new Error('Amazon Polly API URL is not configured.');
+    const pollyBaseUrl = process.env.AMAZON_POLLY_API_URL;
+    if (!pollyBaseUrl) throw new Error('Amazon Polly API URL is not configured.');
+
+    const pollyUrl = `${pollyBaseUrl.replace(/\/$/, '')}/tts`;
     
     const response = await fetch(pollyUrl, {
         method: 'POST',
